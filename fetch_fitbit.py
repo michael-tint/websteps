@@ -4,7 +4,7 @@ Window: 2 days before the last date with steps through yesterday, or last 7 days
 Weight is fetched through today (so today's weigh-in is always captured).
 Uses time series endpoints (same as backfill) to avoid permission issues with the daily summary endpoint.
 """
-import json, urllib.request, urllib.parse, base64
+import json, os, urllib.request, urllib.parse, base64
 from datetime import date, timedelta
 
 _me_file = os.path.join(os.path.dirname(__file__), "me.json")
