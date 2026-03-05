@@ -259,7 +259,7 @@
   <!-- WEIGHT -->
   <div id="panel-weight" class="panel">
     <div class="controls">
-      <button class="save-btn" onclick="syncFitbit()">Sync Fitbit</button>
+      <button class="save-btn" id="fitbit-sync-btn" onclick="syncFitbit()">Sync Fitbit</button>
       <span id="fitbit-status" style="font-size:0.8rem;color:#64748b"></span>
     </div>
     <div class="summary" id="weight-cards"></div>
@@ -923,37 +923,85 @@
         if (!pat) return;
         localStorage.setItem("gh_pat", pat.trim());
       }
-      const status = document.getElementById("fitbit-status");
-      status.style.color = "#94a3b8";
-      status.textContent = "Triggering sync…";
-      try {
-        const res = await fetch(
-          "https://api.github.com/repos/michael-tint/websteps/actions/workflows/fetch_fitbit.yml/dispatches",
-          {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${pat}`,
-              "Accept": "application/vnd.github+json",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ ref: "main" }),
-          }
-        );
-        if (res.status === 204) {
-          status.style.color = "#4ade80";
-          status.textContent = "Sync started — refresh in ~60 seconds.";
-        } else if (res.status === 401) {
-          localStorage.removeItem("gh_pat");
-          status.style.color = "#f87171";
-          status.textContent = "Invalid token — cleared. Try again.";
-        } else {
-          status.style.color = "#f87171";
-          status.textContent = `Error ${res.status}`;
-        }
-      } catch(e) {
-        status.style.color = "#f87171";
-        status.textContent = "Network error.";
+      const statusEl = document.getElementById("fitbit-status");
+      const btn      = document.getElementById("fitbit-sync-btn");
+      const ghHeaders = {
+        "Authorization": `Bearer ${pat}`,
+        "Accept": "application/vnd.github+json",
+        "Content-Type": "application/json",
+      };
+
+      const setStatus = (msg, color) => { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
+
+      btn.disabled = true;
+      setStatus("Starting sync…");
+
+      // 1. Trigger workflow
+      const triggerTime = new Date().toISOString();
+      const triggerRes = await fetch(
+        "https://api.github.com/repos/michael-tint/websteps/actions/workflows/fetch_fitbit.yml/dispatches",
+        { method: "POST", headers: ghHeaders, body: JSON.stringify({ ref: "main" }) }
+      );
+      if (triggerRes.status === 401) {
+        localStorage.removeItem("gh_pat");
+        setStatus("Invalid token — cleared. Try again.", "#f87171");
+        btn.disabled = false; return;
       }
+      if (triggerRes.status !== 204) {
+        setStatus(`Trigger failed (${triggerRes.status})`, "#f87171");
+        btn.disabled = false; return;
+      }
+
+      // 2. Wait for run to appear
+      setStatus("Waiting for workflow to start…");
+      let runId = null;
+      for (let i = 0; i < 15 && !runId; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const r = await fetch(
+          "https://api.github.com/repos/michael-tint/websteps/actions/workflows/fetch_fitbit.yml/runs?per_page=1",
+          { headers: ghHeaders }
+        );
+        const run = (await r.json()).workflow_runs?.[0];
+        if (run && run.created_at >= triggerTime) runId = run.id;
+      }
+      if (!runId) {
+        setStatus("Couldn't find workflow run — check Actions tab.", "#f8c94b");
+        btn.disabled = false; return;
+      }
+
+      // 3. Poll until complete
+      const startedAt = Date.now();
+      let completed = false, conclusion = null;
+      for (let i = 0; i < 40 && !completed; i++) {
+        await new Promise(r => setTimeout(r, 5000));
+        const r    = await fetch(`https://api.github.com/repos/michael-tint/websteps/actions/runs/${runId}`, { headers: ghHeaders });
+        const run  = await r.json();
+        const secs = Math.round((Date.now() - startedAt) / 1000);
+        if (run.status === "completed") { completed = true; conclusion = run.conclusion; }
+        else setStatus(`Syncing… ${secs}s`);
+      }
+      if (!completed) {
+        setStatus("Timed out — check Actions tab.", "#f8c94b");
+        btn.disabled = false; return;
+      }
+      if (conclusion !== "success") {
+        setStatus(`Sync failed (${conclusion}) — check Actions tab.`, "#f87171");
+        btn.disabled = false; return;
+      }
+
+      // 4. Reload weight data without full page refresh
+      setStatus("Loading updated data…");
+      const wRes = await fetch("weight_data.json?t=" + Date.now());
+      if (wRes.ok) {
+        const staticWeight = await wRes.json();
+        const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
+        weightData = Object.assign({}, staticWeight, localWeight);
+        renderWeight();
+        setStatus("Sync complete!", "#4ade80");
+      } else {
+        setStatus("Sync done — reload the page to see updates.", "#4ade80");
+      }
+      btn.disabled = false;
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
