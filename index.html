@@ -971,7 +971,6 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
     // ── delete me row ─────────────────────────────────────────────────────────
     async function deleteRow(date) {
-      if (!confirm(`Delete row for ${date}?`)) return;
       allData.me = allData.me.filter(r => r.date !== date);
       renderRaw("me");
       if (location.hostname === "localhost") {
