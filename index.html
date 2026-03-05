@@ -593,7 +593,7 @@
     async function init() {
       const [dataRes, weightRes] = await Promise.all([
         fetch("data.json"),
-        fetch("weight_data.json").catch(() => null),
+        fetch(location.hostname === "localhost" ? "/weight_data.json" : "https://raw.githubusercontent.com/michael-tint/websteps/main/weight_data.json?t=" + Date.now()).catch(() => null),
       ]);
       allData = await dataRes.json();
       const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
@@ -991,7 +991,7 @@
 
       // 4. Reload weight data without full page refresh
       setStatus("Loading updated data…");
-      const wRes = await fetch("weight_data.json?t=" + Date.now());
+      const wRes = await fetch(location.hostname === "localhost" ? "/weight_data.json?t=" + Date.now() : "https://raw.githubusercontent.com/michael-tint/websteps/main/weight_data.json?t=" + Date.now());
       if (wRes.ok) {
         const staticWeight = await wRes.json();
         const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
