@@ -4,15 +4,15 @@ Window: 2 days before the last date with steps through yesterday, or last 7 days
 Weight is fetched through today (so today's weigh-in is always captured).
 Uses time series endpoints (same as backfill) to avoid permission issues with the daily summary endpoint.
 """
-import json, os, urllib.request, urllib.parse, base64
+import json, urllib.request, urllib.parse, base64
 from datetime import date, timedelta
 
 _me_file = os.path.join(os.path.dirname(__file__), "me.json")
 with open(_me_file) as f:
     _me = json.load(f)
 _creds = _me.get("creds", {})
-client_id     = _creds.get("client_id")     or os.environ["FITBIT_CLIENT_ID"]
-client_secret = _creds.get("client_secret") or os.environ["FITBIT_CLIENT_SECRET"]
+client_id     = _creds["client_id"]
+client_secret = _creds["client_secret"]
 
 # Find the most recent date with a numeric steps value
 _records_with_steps = [
@@ -30,7 +30,7 @@ today      = date.today()
 print(f"Last steps date: {_last_steps}  |  Updating {start_date} to {end_date} (weight through {today})")
 
 # ── refresh access token ──────────────────────────────────────────────────────
-refresh_token = _creds.get("refresh_token") or os.environ["FITBIT_REFRESH_TOKEN"]
+refresh_token = _creds["refresh_token"]
 
 _auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 req = urllib.request.Request(

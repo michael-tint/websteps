@@ -377,7 +377,7 @@
       const allEntries = Object.entries(weightData)
         .filter(([d]) => d <= today)
         .sort(([a],[b]) => a < b ? -1 : 1)
-        .map(([date, e]) => ({ date, ...e, steps: meByDate[date] ?? null, weight: meWeightByDate[date] ?? null }));
+        .map(([date, e]) => ({ date, ...e, steps: meByDate[date] ?? null, weight: meWeightByDate[date] ?? e.weight ?? null }));
 
       const totalGym   = allEntries.filter(e => e.gym).length;
       const weekGym    = allEntries.filter(e => e.gym && e.date >= weekStart && e.date <= today).length;
