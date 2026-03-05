@@ -37,27 +37,37 @@ with open("fitbit_refresh_token.txt", "w") as f:
     f.write(tokens["refresh_token"])
 print("Refresh token rotated.")
 
-# 2. Fetch weight time series (last 1 year)
-today = date.today().strftime("%Y-%m-%d")
-url = f"https://api.fitbit.com/1/user/-/body/weight/date/{today}/1y.json"
-print(f"Fetching: {url}")
-req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
-try:
-    data = json.loads(urllib.request.urlopen(req).read())
-except urllib.error.HTTPError as e:
-    print(f"Weight fetch failed — HTTP {e.code}: {e.read().decode()}")
-    raise
-logs = data.get("body-weight", [])
+# 2. Fetch actual weight log entries (30-day chunks, last 1 year)
+from datetime import timedelta
+
+KG_TO_LBS = 2.20462
+logs = []
+end   = date.today()
+start = end - timedelta(days=365)
+
+chunk_end = end
+while chunk_end > start:
+    chunk_start = max(chunk_end - timedelta(days=29), start)
+    url = (f"https://api.fitbit.com/1/user/-/body/log/weight/date/"
+           f"{chunk_start.strftime('%Y-%m-%d')}/{chunk_end.strftime('%Y-%m-%d')}.json")
+    print(f"Fetching: {url}")
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+    try:
+        data = json.loads(urllib.request.urlopen(req).read())
+        logs.extend(data.get("weight", []))
+    except urllib.error.HTTPError as e:
+        print(f"Weight fetch failed — HTTP {e.code}: {e.read().decode()}")
+        raise
+    chunk_end = chunk_start - timedelta(days=1)
 
 # 3. Load existing weight_data.json
 with open("weight_data.json", "r") as f:
     weight_data = json.load(f)
 
-# 4. Merge — convert kg to lbs
-KG_TO_LBS = 2.20462
+# 4. Merge — convert kg to lbs, last entry per day wins
 for entry in logs:
-    d   = entry["dateTime"]
-    lbs = round(float(entry["value"]) * KG_TO_LBS, 1)
+    d   = entry["date"]
+    lbs = round(float(entry["weight"]) * KG_TO_LBS, 1)
     if d not in weight_data:
         weight_data[d] = {}
     weight_data[d]["weight_fitbit"] = lbs
