@@ -2,7 +2,7 @@
   "creds": {
     "client_id": "23TX78",
     "client_secret": "f6e2fe530460dbd77234afa6372f0183",
-    "refresh_token": "3bc4de1974cfd03c23299b9053242e3fa40b8cf1fae8e547a93dced5fb0b6758"
+    "refresh_token": "fac48f41d7c3c0835a444e71420c0e8ad0fe2eef4d10683e072154a5c72813d7"
   },
   "data": [
     {
@@ -3823,7 +3823,7 @@
       "veryActiveMinutes": 29,
       "activityCalories": 1302,
       "restingHeartRate": 82,
-      "weight": 160.0
+      "weight": 160
     },
     {
       "date": "2025-04-26",
@@ -3883,7 +3883,7 @@
       "veryActiveMinutes": 34,
       "activityCalories": 1216,
       "restingHeartRate": 84,
-      "weight": 162.0
+      "weight": 162
     },
     {
       "date": "2025-04-30",
@@ -4478,7 +4478,7 @@
       "veryActiveMinutes": 12,
       "activityCalories": 802,
       "restingHeartRate": 86,
-      "weight": 159.0
+      "weight": 159
     },
     {
       "date": "2025-06-09",
@@ -4701,7 +4701,7 @@
       "veryActiveMinutes": 51,
       "activityCalories": 1575,
       "restingHeartRate": 84,
-      "weight": 160.0
+      "weight": 160
     },
     {
       "date": "2025-06-24",
@@ -4761,7 +4761,7 @@
       "veryActiveMinutes": 46,
       "activityCalories": 1243,
       "restingHeartRate": 83,
-      "weight": 159.0
+      "weight": 159
     },
     {
       "date": "2025-06-28",
@@ -5183,7 +5183,7 @@
       "veryActiveMinutes": 43,
       "activityCalories": 1205,
       "restingHeartRate": 86,
-      "weight": 158.0
+      "weight": 158
     },
     {
       "date": "2025-07-27",
@@ -5862,7 +5862,7 @@
       "veryActiveMinutes": 81,
       "activityCalories": 1310,
       "restingHeartRate": 84,
-      "weight": 160.0
+      "weight": 160
     },
     {
       "date": "2025-09-12",
@@ -5906,7 +5906,7 @@
       "veryActiveMinutes": 36,
       "activityCalories": 635,
       "restingHeartRate": 83,
-      "weight": 161.0
+      "weight": 161
     },
     {
       "date": "2025-09-15",
@@ -6081,7 +6081,7 @@
       "veryActiveMinutes": 79,
       "activityCalories": 1007,
       "restingHeartRate": 77,
-      "weight": 159.0
+      "weight": 159
     },
     {
       "date": "2025-09-27",
@@ -6124,7 +6124,7 @@
       "fairlyActiveMinutes": 23,
       "veryActiveMinutes": 89,
       "activityCalories": 1234,
-      "weight": 160.0
+      "weight": 160
     },
     {
       "date": "2025-09-30",
@@ -6729,7 +6729,7 @@
       "veryActiveMinutes": 86,
       "activityCalories": 1223,
       "restingHeartRate": 80,
-      "weight": 161.0
+      "weight": 161
     },
     {
       "date": "2025-11-11",
@@ -6861,7 +6861,7 @@
       "veryActiveMinutes": 74,
       "activityCalories": 1291,
       "restingHeartRate": 83,
-      "weight": 162.0
+      "weight": 162
     },
     {
       "date": "2025-11-20",
@@ -7064,7 +7064,7 @@
       "veryActiveMinutes": 52,
       "activityCalories": 1834,
       "restingHeartRate": 90,
-      "weight": 161.0
+      "weight": 161
     },
     {
       "date": "2025-12-04",
@@ -7150,7 +7150,7 @@
       "veryActiveMinutes": 50,
       "activityCalories": 1463,
       "restingHeartRate": 89,
-      "weight": 163.0
+      "weight": 163
     },
     {
       "date": "2025-12-10",
@@ -7526,7 +7526,7 @@
       "veryActiveMinutes": 55,
       "activityCalories": 1374,
       "restingHeartRate": 85,
-      "weight": 167.0
+      "weight": 167
     },
     {
       "date": "2026-01-05",
@@ -7585,7 +7585,7 @@
       "veryActiveMinutes": 23,
       "activityCalories": 1196,
       "restingHeartRate": 86,
-      "weight": 166.0
+      "weight": 166
     },
     {
       "date": "2026-01-09",
@@ -8028,7 +8028,7 @@
       "veryActiveMinutes": 33,
       "activityCalories": 839,
       "restingHeartRate": 83,
-      "weight": 165.0
+      "weight": 165
     },
     {
       "date": "2026-02-09",
@@ -8401,7 +8401,7 @@
     },
     {
       "date": "2026-03-05",
-      "weight": 164.0
+      "weight": 164
     }
   ]
 }
