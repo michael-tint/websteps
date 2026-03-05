@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - index.html
-      - data.json
+      - me.json
+      - mom.json
+      - weight_data.json
 
 permissions:
   contents: read
