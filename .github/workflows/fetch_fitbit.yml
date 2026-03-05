@@ -2,6 +2,8 @@ name: Update Fitbit Data
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 14 * * *'  # 9am EST daily
 
 permissions:
   contents: write
