@@ -37,30 +37,21 @@ with open("fitbit_refresh_token.txt", "w") as f:
     f.write(tokens["refresh_token"])
 print("Refresh token rotated.")
 
-# 2. Fetch actual weight log entries (30-day chunks, last 1 year)
+# 2. Fetch yesterday's weight log entry
 from datetime import timedelta
 
 KG_TO_LBS = 2.20462
-logs = []
-end   = date.today()
-start = end - timedelta(days=365)
-
-chunk_end = end
-while chunk_end > start:
-    chunk_start = max(chunk_end - timedelta(days=29), start)
-    url = (f"https://api.fitbit.com/1/user/-/body/log/weight/date/"
-           f"{chunk_start.strftime('%Y-%m-%d')}/{chunk_end.strftime('%Y-%m-%d')}.json")
-    print(f"Fetching: {url}")
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
-    try:
-        resp = urllib.request.urlopen(req)
-        chunk_logs = json.loads(resp.read()).get("weight", [])
-        print(f"  → {len(chunk_logs)} entries | rate limit remaining: {resp.headers.get('Fitbit-Rate-Limit-Remaining','?')} / {resp.headers.get('Fitbit-Rate-Limit-Limit','?')} (resets in {resp.headers.get('Fitbit-Rate-Limit-Reset','?')}s)")
-        logs.extend(chunk_logs)
-    except urllib.error.HTTPError as e:
-        print(f"  → HTTP {e.code}: {e.read().decode()} | rate limit remaining: {e.headers.get('Fitbit-Rate-Limit-Remaining','?')}")
-        raise
-    chunk_end = chunk_start - timedelta(days=1)
+yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+url = f"https://api.fitbit.com/1/user/-/body/log/weight/date/{yesterday}/{yesterday}.json"
+print(f"Fetching: {url}")
+req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+try:
+    resp = urllib.request.urlopen(req)
+    logs = json.loads(resp.read()).get("weight", [])
+    print(f"  → {len(logs)} entries | rate limit remaining: {resp.headers.get('Fitbit-Rate-Limit-Remaining','?')} / {resp.headers.get('Fitbit-Rate-Limit-Limit','?')}")
+except urllib.error.HTTPError as e:
+    print(f"  → HTTP {e.code}: {e.read().decode()}")
+    raise
 
 # 3. Load existing weight_data.json
 with open("weight_data.json", "r") as f:
