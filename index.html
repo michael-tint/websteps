@@ -268,6 +268,7 @@
           <th>Bone</th>
           <th>Gym</th>
           <th>Weight</th>
+          <th>Wt (Fitbit)</th>
           <th>Steps</th>
         </tr></thead>
         <tbody id="weight-tbody"></tbody>
@@ -1001,6 +1002,7 @@
           <td>${inp(date,"bone","w-comp",mergedData)}</td>
           <td>${inp(date,"gym","gym-input",mergedData)}</td>
           <td>${inp(date,"weight","w-weight",mergedData)}</td>
+          <td style="color:#4ade80;text-align:right">${mergedData[date]?.weight_fitbit != null ? fmt(mergedData[date].weight_fitbit,1) : ""}</td>
           <td style="color:#94a3b8;text-align:right">${steps}</td>
         </tr>`;
       }).join("");

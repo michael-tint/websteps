@@ -2,9 +2,9 @@
 *.bmp
 *.png
 __pycache__/
-*.py
 *.bat
 ~$*
-export_data.py
 serve.py
 start.bat
+export_data.py
+new_refresh_token.txt
