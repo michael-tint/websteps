@@ -2,7 +2,7 @@
   "creds": {
     "client_id": "23TX78",
     "client_secret": "f6e2fe530460dbd77234afa6372f0183",
-    "refresh_token": "07252ce2bfac6eacb6163fe73b72b027fa1ee6ff286d0de63a2b49540cf8e843"
+    "refresh_token": "8d1f22c105fd33ab5178437648f90ce501e6e244d4ede1d5d538e99f1537b501"
   },
   "data": [
     {
@@ -8401,7 +8401,7 @@
     },
     {
       "date": "2026-03-05",
-      "weight": 165.0
+      "weight": 164.0
     }
   ]
 }
