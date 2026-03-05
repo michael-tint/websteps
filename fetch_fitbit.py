@@ -29,11 +29,14 @@ with open("new_refresh_token.txt", "w") as f:
     f.write(tokens["refresh_token"])
 
 # 2. Fetch weight logs (last 1 year)
-req = urllib.request.Request(
-    f"https://api.fitbit.com/1/user/-/body/log/weight/date/{date.today()}/1y.json",
-    headers={"Authorization": f"Bearer {access_token}"},
-)
-data = json.loads(urllib.request.urlopen(req).read())
+url = f"https://api.fitbit.com/1/user/-/body/log/weight/date/{date.today().strftime('%Y-%m-%d')}/1y.json"
+print(f"Fetching: {url}")
+req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+try:
+    data = json.loads(urllib.request.urlopen(req).read())
+except urllib.error.HTTPError as e:
+    print(f"HTTP {e.code}: {e.read().decode()}")
+    raise
 logs = data.get("weight", [])
 
 # 3. Load existing weight_data.json
