@@ -3030,7 +3030,7 @@
   },
   "2025-05-17": {
     "weight": 159.8,
-    "weight_fitbit": 160.9
+    "weight_fitbit": 159.6
   },
   "2025-05-18": {
     "weight": 162.4,
@@ -3039,7 +3039,7 @@
   "2025-05-19": {
     "weight": 161.2,
     "gym": "Ass/core",
-    "weight_fitbit": 161.6
+    "weight_fitbit": 161.2
   },
   "2025-05-20": {
     "weight": 157.6,
@@ -3120,7 +3120,7 @@
   "2025-06-06": {
     "weight": 158.6,
     "gym": "arms/legs",
-    "weight_fitbit": 158.7
+    "weight_fitbit": 158.5
   },
   "2025-06-07": {
     "weight": 159.2,
@@ -3138,7 +3138,7 @@
   "2025-06-10": {
     "weight": 160.4,
     "gym": "arms/core",
-    "weight_fitbit": 161.8
+    "weight_fitbit": 160.3
   },
   "2025-06-11": {
     "weight": 159.8,
@@ -3214,7 +3214,7 @@
   "2025-06-27": {
     "weight": 159,
     "gym": "arms/glutes",
-    "weight_fitbit": 159.4
+    "weight_fitbit": 159.0
   },
   "2025-06-28": {
     "weight_fitbit": 160.1
@@ -3241,7 +3241,7 @@
   },
   "2025-07-04": {
     "weight": 160,
-    "weight_fitbit": 160.5
+    "weight_fitbit": 159.8
   },
   "2025-07-05": {
     "weight": 159.8,
@@ -3853,7 +3853,7 @@
   "2025-12-04": {
     "weight": 159.2,
     "gym": "total body",
-    "weight_fitbit": 160.1
+    "weight_fitbit": 159.2
   },
   "2025-12-08": {
     "gym": "chest/core",
@@ -3871,7 +3871,7 @@
   "2025-12-12": {
     "weight": 162.4,
     "gym": "legs/chest",
-    "weight_fitbit": 164.7
+    "weight_fitbit": 162.3
   },
   "2025-12-13": {
     "weight": 162.8,
@@ -3909,7 +3909,7 @@
   },
   "2025-12-21": {
     "weight": 163.4,
-    "weight_fitbit": 164.2
+    "weight_fitbit": 163.4
   },
   "2025-12-22": {
     "weight_fitbit": 164.5
@@ -3948,11 +3948,11 @@
   "2026-01-02": {
     "weight": 166.6,
     "gym": "arms/legs",
-    "weight_fitbit": 166.4
+    "weight_fitbit": 165.1
   },
   "2026-01-03": {
     "weight": 165.6,
-    "weight_fitbit": 166.2
+    "weight_fitbit": 165.6
   },
   "2026-01-04": {
     "weight": 167,
@@ -3965,7 +3965,7 @@
   "2026-01-06": {
     "weight": 166.6,
     "gym": "chest/core",
-    "weight_fitbit": 168.0
+    "weight_fitbit": 166.4
   },
   "2026-01-07": {
     "weight": 166.4,
@@ -3974,7 +3974,7 @@
   },
   "2026-01-08": {
     "weight": 166,
-    "weight_fitbit": 167.3
+    "weight_fitbit": 166.0
   },
   "2026-01-09": {
     "gym": "back/chest",
@@ -3992,7 +3992,7 @@
   "2026-01-13": {
     "weight": 166.6,
     "gym": "andre arms",
-    "weight_fitbit": 168.2
+    "weight_fitbit": 166.7
   },
   "2026-01-14": {
     "gym": "legs/chest",
@@ -4036,7 +4036,7 @@
   "2026-01-23": {
     "weight": 165,
     "gym": "back/legs",
-    "weight_fitbit": 168.0
+    "weight_fitbit": 164.9
   },
   "2026-01-24": {
     "weight_fitbit": 166.9
@@ -4081,7 +4081,7 @@
   "2026-02-05": {
     "weight": 170.2,
     "gym": "total body",
-    "weight_fitbit": 171.1
+    "weight_fitbit": 170.2
   },
   "2026-02-06": {
     "weight": 166.8,
@@ -4153,7 +4153,7 @@
   },
   "2026-02-21": {
     "weight": 166.2,
-    "weight_fitbit": 167.3
+    "weight_fitbit": 166.0
   },
   "2026-02-22": {
     "weight": 166.2,
@@ -4176,7 +4176,7 @@
   "2026-02-26": {
     "weight": 165,
     "gym": "total body",
-    "weight_fitbit": 165.1
+    "weight_fitbit": 164.9
   },
   "2026-02-27": {
     "weight": 164.4,
