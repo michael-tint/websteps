@@ -74,7 +74,7 @@
     #panel-weight table th:nth-child(2),
     #panel-weight table th:nth-child(3),
     #panel-weight table th:nth-child(4) { width: 10rem; }
-    #panel-weight table th:nth-child(5) { width: 12ch; }
+    #panel-weight table th:nth-child(5) { width: 22ch; }
     #panel-weight table th:nth-child(6) { width: 6rem; }
     #panel-weight table th:nth-child(7) { width: 1rem; }
 
@@ -190,6 +190,10 @@
 
   <!-- DASHBOARD -->
   <div id="panel-dashboard" class="panel">
+    <div class="controls">
+      <button class="save-btn" onclick="updateFitbitMe(this, document.getElementById('steps-update-status'))">Update</button>
+      <span id="steps-update-status" style="font-size:0.8rem;color:#64748b"></span>
+    </div>
     <div class="summary" id="dash-cards"></div>
     <div class="dash-main">
       <div class="dash-table-wrap">
@@ -209,6 +213,8 @@
   <div id="panel-gym" class="panel active">
     <div class="controls">
       <button class="save-btn" onclick="saveGymView()">Save View</button>
+      <button class="save-btn" onclick="updateFitbitMe(this, document.getElementById('gym-update-status'))">Update</button>
+      <span id="gym-update-status" style="font-size:0.8rem;color:#64748b"></span>
     </div>
     <div class="summary" id="gym-cards"></div>
     <div class="dash-main">
@@ -267,6 +273,8 @@
   <!-- WEIGHT -->
   <div id="panel-weight" class="panel">
     <div class="controls">
+      <button class="save-btn" onclick="updateFitbitMe(this, document.getElementById('weight-update-status'))">Update</button>
+      <span id="weight-update-status" style="font-size:0.8rem;color:#64748b"></span>
     </div>
     <div class="summary" id="weight-cards"></div>
     <div class="table-wrap" style="flex:1;min-height:0;">
@@ -982,9 +990,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     // ── Fitbit update ─────────────────────────────────────────────────────────
-    async function updateFitbitMe() {
-      const btn      = document.getElementById("me-update-btn");
-      const statusEl = document.getElementById("me-update-status");
+    async function updateFitbitMe(btn, statusEl) {
+      btn      = btn      || document.getElementById("me-update-btn");
+      statusEl = statusEl || document.getElementById("me-update-status");
       const setStatus = (msg, color) => { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
 
       btn.disabled = true;
@@ -1154,7 +1162,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
           <td>${inp(date,"gym","gym-input",mergedData)}</td>
           <td>${inp(date,"weight","w-weight",mergedData)}</td>
           <td style="color:#4ade80;text-align:right">${meWeightByDate[date] != null ? fmt(meWeightByDate[date],1) : ""}</td>
-          <td style="color:#94a3b8;text-align:right">${meWeightByDate[date] != null ? fmt(calcBMI(meWeightByDate[date]),1) : ""}</td>
+          <td style="color:#94a3b8;text-align:left">${meWeightByDate[date] != null ? fmt(calcBMI(meWeightByDate[date]),1) : ""}</td>
           <td style="color:#94a3b8;text-align:right">${steps}</td>
         </tr>`;
       }).join("");
