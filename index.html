@@ -598,8 +598,10 @@
       allData = await dataRes.json();
       const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
       const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
-      // localStorage overrides static file
-      weightData = Object.assign({}, staticWeight, localWeight);
+      // deep merge per date: local fields override static, but unset fields keep static values
+      weightData = {};
+      for (const k of new Set([...Object.keys(staticWeight), ...Object.keys(localWeight)]))
+        weightData[k] = { ...(staticWeight[k]||{}), ...(localWeight[k]||{}) };
 
       // Global max for fixed Y axis
       for (const r of [...(allData.me||[]), ...(allData.mom||[])])
@@ -995,7 +997,9 @@
       if (wRes.ok) {
         const staticWeight = await wRes.json();
         const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
-        weightData = Object.assign({}, staticWeight, localWeight);
+        weightData = {};
+        for (const k of new Set([...Object.keys(staticWeight), ...Object.keys(localWeight)]))
+          weightData[k] = { ...(staticWeight[k]||{}), ...(localWeight[k]||{}) };
         renderWeight();
         setStatus("Sync complete!", "#4ade80");
       } else {
