@@ -597,8 +597,8 @@
       const rawBase = location.hostname === "localhost" ? "" : "https://raw.githubusercontent.com/michael-tint/websteps/main";
       const cacheBust = "?t=" + Date.now();
       const [meRes, momRes, weightRes, activityRes] = await Promise.all([
-        fetch("me.json").catch(() => null),
-        fetch("mom.json").catch(() => null),
+        fetch(rawBase ? rawBase + "/me.json"  + cacheBust : "/me.json").catch(() => null),
+        fetch(rawBase ? rawBase + "/mom.json" + cacheBust : "/mom.json").catch(() => null),
         fetch(rawBase ? rawBase + "/weight_data.json" + cacheBust : "/weight_data.json").catch(() => null),
         fetch(rawBase ? rawBase + "/fitbit_activity.json" + cacheBust : "/fitbit_activity.json").catch(() => null),
       ]);
@@ -606,7 +606,7 @@
         me:  (meRes  && meRes.ok)  ? await meRes.json()  : [],
         mom: (momRes && momRes.ok) ? await momRes.json() : [],
       };
-      const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
+const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
       const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
       // deep merge per date: local fields override static, but unset fields keep static values
       weightData = {};
@@ -651,7 +651,7 @@
       document.getElementById("comp-range").style.display = name === "gym" ? "flex" : "none";
       localStorage.setItem("lastTab", name);
       if (name==="me"     && !document.getElementById("me-tbody").innerHTML)     renderRaw("me");
-      if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    renderRaw("mom");
+if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    renderRaw("mom");
       if (name==="weight") renderWeight();
       if (name==="gym")    renderGym();
     }
