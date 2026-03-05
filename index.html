@@ -258,6 +258,10 @@
 
   <!-- WEIGHT -->
   <div id="panel-weight" class="panel">
+    <div class="controls">
+      <button class="save-btn" onclick="syncFitbit()">Sync Fitbit</button>
+      <span id="fitbit-status" style="font-size:0.8rem;color:#64748b"></span>
+    </div>
     <div class="summary" id="weight-cards"></div>
     <div class="table-wrap" style="flex:1;min-height:0;">
       <table>
@@ -909,6 +913,47 @@
       const tbody = document.getElementById(`${user}-tbody`);
       if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length}" class="status">No data.</td></tr>`; return; }
       tbody.innerHTML = [...rows].reverse().map(r=>`<tr>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}</tr>`).join("");
+    }
+
+    // ── Fitbit sync ───────────────────────────────────────────────────────────
+    async function syncFitbit() {
+      let pat = localStorage.getItem("gh_pat");
+      if (!pat) {
+        pat = prompt("Enter a GitHub Personal Access Token with 'workflow' scope.\nIt will be saved locally for future use.");
+        if (!pat) return;
+        localStorage.setItem("gh_pat", pat.trim());
+      }
+      const status = document.getElementById("fitbit-status");
+      status.style.color = "#94a3b8";
+      status.textContent = "Triggering sync…";
+      try {
+        const res = await fetch(
+          "https://api.github.com/repos/michael-tint/websteps/actions/workflows/fetch_fitbit.yml/dispatches",
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${pat}`,
+              "Accept": "application/vnd.github+json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ref: "main" }),
+          }
+        );
+        if (res.status === 204) {
+          status.style.color = "#4ade80";
+          status.textContent = "Sync started — refresh in ~60 seconds.";
+        } else if (res.status === 401) {
+          localStorage.removeItem("gh_pat");
+          status.style.color = "#f87171";
+          status.textContent = "Invalid token — cleared. Try again.";
+        } else {
+          status.style.color = "#f87171";
+          status.textContent = `Error ${res.status}`;
+        }
+      } catch(e) {
+        status.style.color = "#f87171";
+        status.textContent = "Network error.";
+      }
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
