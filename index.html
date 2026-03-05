@@ -286,6 +286,7 @@
   <script>
     let allData = {};
     let weightData = {};
+    const STEPS_FROM = "2025-01-01";
     let stepsChart = null;
     let globalMaxSteps = 0;
     let expandedYears  = new Set();
@@ -615,7 +616,7 @@ const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
         weightData[k] = { ...(staticWeight[k]||{}), ...(localWeight[k]||{}) };
 
       // Global max for fixed Y axis
-      for (const r of [...(allData.me||[]), ...(allData.mom||[])])
+      for (const r of [...(allData.me||[]), ...(allData.mom||[])].filter(r => r.date >= STEPS_FROM))
         if (r.steps > globalMaxSteps) globalMaxSteps = r.steps;
 
       // Expand all years by default → opens to month level
@@ -696,7 +697,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
     // ── reference average (next level up) ────────────────────────────────────
     function computeRef(user, item) {
-      const rows = allData[user] || [];
+      const rows = (allData[user] || []).filter(r => r.date >= STEPS_FROM);
       if (item.type === 'year') {
         return avgSteps(rows);
       }
@@ -721,8 +722,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     // ── build flat item list ──────────────────────────────────────────────────
     function buildItems() {
       const items = [];
-      const meAll  = allData.me  || [];
-      const momAll = allData.mom || [];
+      const meAll  = (allData.me  || []).filter(r => r.date >= STEPS_FROM);
+      const momAll = (allData.mom || []).filter(r => r.date >= STEPS_FROM);
       const meYears  = groupBy(meAll,  r=>r.date.slice(0,4));
       const momYears = groupBy(momAll, r=>r.date.slice(0,4));
       const years    = mergeKeys(meYears, momYears);
@@ -898,7 +899,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     function renderDashboard() {
-      const meAll = allData.me||[], momAll = allData.mom||[];
+      const meAll = (allData.me||[]).filter(r => r.date >= STEPS_FROM), momAll = (allData.mom||[]).filter(r => r.date >= STEPS_FROM);
       document.getElementById("dash-cards").innerHTML = `
         <div class="card"><div class="card-label">Me - Avg</div><div class="card-value blue">${fmt(avgSteps(meAll))}</div></div>
         <div class="card"><div class="card-label">Mom - Avg</div><div class="card-value pink">${fmt(avgSteps(momAll))}</div></div>
