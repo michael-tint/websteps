@@ -166,7 +166,7 @@
 <body>
   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem;">
     <h1 style="margin-bottom:0">WebSteps</h1>
-    <div style="display:flex;gap:0.4rem;align-items:center;">
+    <div id="comp-range" style="display:flex;gap:0.4rem;align-items:center;">
       <span style="font-size:0.75rem;color:#64748b">Chart min</span>
       <input type="text" inputmode="numeric" id="comp-min" value="120" oninput="updateCompChart()" style="width:4rem;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.9rem;text-align:right;">
       <span style="font-size:0.75rem;color:#64748b">max</span>
@@ -630,6 +630,7 @@
       document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
       btn.classList.add("active");
       document.getElementById(`panel-${name}`).classList.add("active");
+      document.getElementById("comp-range").style.display = name === "gym" ? "flex" : "none";
       localStorage.setItem("lastTab", name);
       if (name==="me"     && !document.getElementById("me-tbody").innerHTML)     renderRaw("me");
       if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    renderRaw("mom");
@@ -861,7 +862,7 @@
             x: { ticks:{ color:"#64748b", maxRotation:45 }, grid:{ color:"#1e293b" } },
             y: {
               beginAtZero: true,
-              suggestedMax: Math.round(globalMaxSteps * 1.08),
+              max: 20000,
               ticks:{ color:"#64748b", callback:v=>fmt(v) },
               grid:{ color:"#334155" },
               title:{ display:true, text:"Steps", color:"#64748b" },
@@ -881,8 +882,8 @@
     function renderDashboard() {
       const meAll = allData.me||[], momAll = allData.mom||[];
       document.getElementById("dash-cards").innerHTML = `
-        <div class="card"><div class="card-label">Me — avg steps/day</div><div class="card-value blue">${fmt(avgSteps(meAll))}</div></div>
-        <div class="card"><div class="card-label">Mom — avg steps/day</div><div class="card-value pink">${fmt(avgSteps(momAll))}</div></div>
+        <div class="card"><div class="card-label">Me - Avg</div><div class="card-value blue">${fmt(avgSteps(meAll))}</div></div>
+        <div class="card"><div class="card-label">Mom - Avg</div><div class="card-value pink">${fmt(avgSteps(momAll))}</div></div>
         <div class="card"><div class="card-label">Me — total steps</div><div class="card-value blue">${fmt(meAll.reduce((s,r)=>s+(r.steps||0),0))}</div></div>
         <div class="card"><div class="card-label">Mom — total steps</div><div class="card-value pink">${fmt(momAll.reduce((s,r)=>s+(r.steps||0),0))}</div></div>
       `;
