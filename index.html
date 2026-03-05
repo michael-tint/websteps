@@ -59,6 +59,7 @@
       text-align: right;
     }
     .w-input.w-weight { width: 7ch; }
+    .w-input.w-comp   { width: 8ch; }
     .w-input.gym-input {
       width: 100%;
       text-align: left;
@@ -72,10 +73,10 @@
     #panel-weight table th:nth-child(1) { width: 7rem; }
     #panel-weight table th:nth-child(2),
     #panel-weight table th:nth-child(3),
-    #panel-weight table th:nth-child(4) { width: 5rem; }
+    #panel-weight table th:nth-child(4) { width: 10rem; }
     #panel-weight table th:nth-child(5) { width: 12ch; }
     #panel-weight table th:nth-child(6) { width: 6rem; }
-    #panel-weight table th:nth-child(7) { width: 6rem; }
+    #panel-weight table th:nth-child(7) { width: 1rem; }
 
     /* raw tab controls */
     .controls { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem; flex-shrink: 0; }
@@ -226,7 +227,6 @@
         </table>
       </div>
       <div class="chart-wrap">
-        <div class="chart-title">Weight &amp; Body Composition</div>
         <canvas id="gymChart"></canvas>
       </div>
     </div>
@@ -995,9 +995,9 @@
         const steps = meByDate[date] != null ? fmt(meByDate[date]) : "—";
         return `<tr>
           <td style="text-align:left;color:#94a3b8">${date}</td>
-          <td>${inp(date,"fat","",mergedData)}</td>
-          <td>${inp(date,"muscle","",mergedData)}</td>
-          <td>${inp(date,"bone","",mergedData)}</td>
+          <td>${inp(date,"fat","w-comp",mergedData)}</td>
+          <td>${inp(date,"muscle","w-comp",mergedData)}</td>
+          <td>${inp(date,"bone","w-comp",mergedData)}</td>
           <td>${inp(date,"gym","gym-input",mergedData)}</td>
           <td>${inp(date,"weight","w-weight",mergedData)}</td>
           <td style="color:#94a3b8;text-align:right">${steps}</td>
