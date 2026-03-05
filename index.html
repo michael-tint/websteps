@@ -261,8 +261,6 @@
   <!-- WEIGHT -->
   <div id="panel-weight" class="panel">
     <div class="controls">
-      <button class="save-btn" id="fitbit-sync-btn" onclick="syncFitbit()">Sync Fitbit</button>
-      <span id="fitbit-status" style="font-size:0.8rem;color:#64748b"></span>
     </div>
     <div class="summary" id="weight-cards"></div>
     <div class="table-wrap" style="flex:1;min-height:0;">
@@ -285,7 +283,6 @@
   <script>
     let allData = {};
     let weightData = {};
-    let fitbitActivity = {};
     let stepsChart = null;
     let globalMaxSteps = 0;
     let expandedYears  = new Set();
@@ -596,11 +593,10 @@
     async function init() {
       const rawBase = location.hostname === "localhost" ? "" : "https://raw.githubusercontent.com/michael-tint/websteps/main";
       const cacheBust = "?t=" + Date.now();
-      const [meRes, momRes, weightRes, activityRes] = await Promise.all([
+      const [meRes, momRes, weightRes] = await Promise.all([
         fetch(rawBase ? rawBase + "/me.json"  + cacheBust : "/me.json").catch(() => null),
         fetch(rawBase ? rawBase + "/mom.json" + cacheBust : "/mom.json").catch(() => null),
         fetch(rawBase ? rawBase + "/weight_data.json" + cacheBust : "/weight_data.json").catch(() => null),
-        fetch(rawBase ? rawBase + "/fitbit_activity.json" + cacheBust : "/fitbit_activity.json").catch(() => null),
       ]);
       allData = {
         me:  (meRes  && meRes.ok)  ? await meRes.json()  : [],
@@ -612,7 +608,6 @@ const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
       weightData = {};
       for (const k of new Set([...Object.keys(staticWeight), ...Object.keys(localWeight)]))
         weightData[k] = { ...(staticWeight[k]||{}), ...(localWeight[k]||{}) };
-      fitbitActivity = (activityRes && activityRes.ok) ? await activityRes.json() : {};
 
       // Global max for fixed Y axis
       for (const r of [...(allData.me||[]), ...(allData.mom||[])])
@@ -925,16 +920,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       `;
       const tbody = document.getElementById(`${user}-tbody`);
       if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length}" class="status">No data.</td></tr>`; return; }
-      tbody.innerHTML = [...rows].reverse().map(r => {
-        const fb = (user === "me") ? fitbitActivity[r.date] : null;
-        const mainRow = `<tr>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}</tr>`;
-        if (!fb) return mainRow;
-        const fbRow = `<tr style="background:#0d2137">${RAW_COLS.map(c => {
-          if (c.key === "date") return `<td style="color:#38bdf8;font-size:0.72rem">Fitbit</td>`;
-          return `<td style="color:#38bdf8">${fb[c.key]??"—"}</td>`;
-        }).join("")}</tr>`;
-        return mainRow + fbRow;
-      }).join("");
+      tbody.innerHTML = [...rows].reverse().map(r =>
+        `<tr>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}</tr>`
+      ).join("");
     }
 
     // ── Fitbit sync ───────────────────────────────────────────────────────────
@@ -989,46 +977,21 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       btn.disabled = false;
     }
 
-    async function syncFitbit() {
-      await syncFitbitWorkflow(
-        document.getElementById("fitbit-sync-btn"),
-        document.getElementById("fitbit-status"),
-        async (setStatus) => {
-          const wRes = await fetch(rawUrl("weight_data.json")).catch(() => null);
-          if (wRes?.ok) {
-            const staticWeight = await wRes.json();
-            const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
-            weightData = {};
-            for (const k of new Set([...Object.keys(staticWeight), ...Object.keys(localWeight)]))
-              weightData[k] = { ...(staticWeight[k]||{}), ...(localWeight[k]||{}) };
-            renderWeight();
-            setStatus("Sync complete!", "#4ade80");
-          } else {
-            setStatus("Sync done — reload to see updates.", "#4ade80");
-          }
-        }
-      );
-    }
-
     async function syncFitbitMe() {
       const statusEl = document.getElementById("me-sync-status");
       const btn      = document.getElementById("me-sync-btn");
-      await syncFitbitWorkflow(btn, statusEl, async () => {
-        const rawBase  = location.hostname === "localhost" ? "" : "https://raw.githubusercontent.com/michael-tint/websteps/main";
+      await syncFitbitWorkflow(btn, statusEl, async (setStatus) => {
+        const rawBase   = location.hostname === "localhost" ? "" : "https://raw.githubusercontent.com/michael-tint/websteps/main";
         const cacheBust = "?t=" + Date.now();
-        const [wRes, aRes] = await Promise.all([
-          fetch(rawBase ? rawBase + "/weight_data.json" + cacheBust : "/weight_data.json").catch(()=>null),
-          fetch(rawBase ? rawBase + "/fitbit_activity.json" + cacheBust : "/fitbit_activity.json").catch(()=>null),
-        ]);
-        if (wRes?.ok) {
-          const staticWeight = await wRes.json();
-          const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
-          weightData = {};
-          for (const k of new Set([...Object.keys(staticWeight), ...Object.keys(localWeight)]))
-            weightData[k] = { ...(staticWeight[k]||{}), ...(localWeight[k]||{}) };
+        const meRes = await fetch(rawBase ? rawBase + "/me.json" + cacheBust : "/me.json").catch(() => null);
+        if (meRes?.ok) {
+          allData.me = await meRes.json();
+          document.getElementById("me-tbody").innerHTML = "";
+          renderRaw("me");
+          setStatus("Sync complete!", "#4ade80");
+        } else {
+          setStatus("Sync done — reload to see updates.", "#4ade80");
         }
-        if (aRes?.ok) fitbitActivity = await aRes.json();
-        renderRaw("me");
       });
     }
 

@@ -1,9 +1,9 @@
 """
-fetch_fitbit.py — refresh Fitbit token and sync weight data into weight_data.json
+fetch_fitbit.py — refresh Fitbit token, sync weight + activity data
 Refresh token is stored in fitbit_refresh_token.txt (committed to repo).
 """
 import json, os, urllib.request, urllib.parse, base64
-from datetime import date
+from datetime import date, timedelta
 
 client_id     = os.environ["FITBIT_CLIENT_ID"]
 client_secret = os.environ["FITBIT_CLIENT_SECRET"]
@@ -32,41 +32,75 @@ except urllib.error.HTTPError as e:
     raise
 access_token = tokens["access_token"]
 
-# Save new refresh token back to file
 with open("fitbit_refresh_token.txt", "w") as f:
     f.write(tokens["refresh_token"])
 print("Refresh token rotated.")
 
-# 2. Fetch yesterday's weight log entry
-from datetime import timedelta
+def fitbit_get(url):
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+    try:
+        resp = urllib.request.urlopen(req)
+        data = json.loads(resp.read())
+        print(f"  {url.split('fitbit.com')[1]} → OK | rate limit remaining: {resp.headers.get('Fitbit-Rate-Limit-Remaining','?')}/150")
+        return data
+    except urllib.error.HTTPError as e:
+        print(f"  {url.split('fitbit.com')[1]} → HTTP {e.code}: {e.read().decode()}")
+        raise
 
+TARGET = "2026-03-04"   # TODO: change to rolling window later
+
+# 2. Fetch weight
 KG_TO_LBS = 2.20462
-yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-url = f"https://api.fitbit.com/1/user/-/body/log/weight/date/{yesterday}/{yesterday}.json"
-print(f"Fetching: {url}")
-req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
-try:
-    resp = urllib.request.urlopen(req)
-    logs = json.loads(resp.read()).get("weight", [])
-    print(f"  → {len(logs)} entries | rate limit remaining: {resp.headers.get('Fitbit-Rate-Limit-Remaining','?')} / {resp.headers.get('Fitbit-Rate-Limit-Limit','?')}")
-except urllib.error.HTTPError as e:
-    print(f"  → HTTP {e.code}: {e.read().decode()}")
-    raise
+weight_logs = fitbit_get(
+    f"https://api.fitbit.com/1/user/-/body/log/weight/date/{TARGET}/{TARGET}.json"
+).get("weight", [])
 
-# 3. Load existing weight_data.json
 with open("weight_data.json", "r") as f:
     weight_data = json.load(f)
 
-# 4. Merge — convert kg to lbs, last entry per day wins
-for entry in logs:
-    d   = entry["date"]
-    lbs = round(float(entry["weight"]) * KG_TO_LBS, 1)
-    if d not in weight_data:
-        weight_data[d] = {}
-    weight_data[d]["weight_fitbit"] = lbs
+# Take the lowest weight for TARGET date from the API only
+target_weights = [round(float(e["weight"]) * KG_TO_LBS, 1) for e in weight_logs if e["date"] == TARGET]
+daily_weight = min(target_weights) if target_weights else None
+if daily_weight is not None:
+    if TARGET not in weight_data: weight_data[TARGET] = {}
+    weight_data[TARGET]["weight_fitbit"] = daily_weight
 
-# 5. Save
 with open("weight_data.json", "w") as f:
     json.dump(weight_data, f, indent=2)
+print(f"Weight: synced {len(weight_logs)} entries, daily_weight={daily_weight}")
 
-print(f"Synced {len(logs)} Fitbit weight entries")
+# 3. Fetch activity summary
+summary = fitbit_get(
+    f"https://api.fitbit.com/1/user/-/activities/date/{TARGET}.json"
+).get("summary", {})
+
+fitbit_fields = {
+    "steps":                summary.get("steps"),
+    "caloriesOut":          summary.get("caloriesOut"),
+    "activityCalories":     summary.get("activityCalories"),
+    "caloriesBMR":          summary.get("caloriesBMR"),
+    "activeScore":          summary.get("activeScore"),
+    "floors":               summary.get("floors"),
+    "elevation":            summary.get("elevation"),
+    "sedentaryMinutes":     summary.get("sedentaryMinutes"),
+    "lightlyActiveMinutes": summary.get("lightlyActiveMinutes"),
+    "fairlyActiveMinutes":  summary.get("fairlyActiveMinutes"),
+    "veryActiveMinutes":    summary.get("veryActiveMinutes"),
+    "marginalCalories":     summary.get("marginalCalories"),
+    "restingHeartRate":     summary.get("restingHeartRate"),
+    "weight_fitbit":        daily_weight,
+}
+
+with open("me.json", "r") as f:
+    me_data = json.load(f)
+
+existing = next((r for r in me_data if r.get("date") == TARGET), None)
+if existing:
+    existing.update({k: v for k, v in fitbit_fields.items() if v is not None})
+else:
+    me_data.append({"date": TARGET, **{k: v for k, v in fitbit_fields.items() if v is not None}})
+    me_data.sort(key=lambda r: r["date"])
+
+with open("me.json", "w") as f:
+    json.dump(me_data, f, indent=2)
+print(f"Activity: synced {TARGET} into me.json — {fitbit_fields.get('steps')} steps")
