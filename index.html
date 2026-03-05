@@ -168,6 +168,10 @@
 <body>
   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem;">
     <h1 style="margin-bottom:0">WebSteps</h1>
+    <label style="font-size:0.75rem;color:#64748b;cursor:pointer;" title="Load me.json from disk">
+      📂 Load me.json
+      <input type="file" accept=".json" style="display:none" onchange="loadLocalJson(event)">
+    </label>
     <div id="comp-range" style="display:flex;gap:0.4rem;align-items:center;">
       <span style="font-size:0.75rem;color:#64748b">Chart min</span>
       <input type="text" inputmode="numeric" id="comp-min" value="120" oninput="updateCompChart()" style="width:4rem;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.9rem;text-align:right;">
@@ -1124,6 +1128,26 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
           <td style="color:#94a3b8;text-align:right">${steps}</td>
         </tr>`;
       }).join("");
+    }
+
+    function loadLocalJson(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          allData.me = parsed.data || parsed;
+          document.getElementById("me-tbody").innerHTML = "";
+          globalMaxSteps = 0;
+          for (const r of allData.me) if (r.steps > globalMaxSteps) globalMaxSteps = r.steps;
+          renderGym();
+          renderWeight();
+          renderDashboard();
+        } catch { alert("Invalid JSON file."); }
+      };
+      reader.readAsText(file);
+      event.target.value = "";
     }
 
     init();
