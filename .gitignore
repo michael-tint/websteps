@@ -8,3 +8,4 @@ serve.py
 start.bat
 export_data.py
 new_refresh_token.txt
+# fitbit_refresh_token.txt is intentionally committed

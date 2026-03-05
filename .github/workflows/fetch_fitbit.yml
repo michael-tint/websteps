@@ -18,18 +18,12 @@ jobs:
         env:
           FITBIT_CLIENT_ID:     ${{ secrets.FITBIT_CLIENT_ID }}
           FITBIT_CLIENT_SECRET: ${{ secrets.FITBIT_CLIENT_SECRET }}
-          FITBIT_REFRESH_TOKEN: ${{ secrets.FITBIT_REFRESH_TOKEN }}
         run: python fetch_fitbit.py
-
-      - name: Rotate refresh token secret
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: gh secret set FITBIT_REFRESH_TOKEN --repo michael-tint/websteps --body "$(cat new_refresh_token.txt)"
 
       - name: Commit and push
         run: |
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
-          git add weight_data.json
+          git add weight_data.json fitbit_refresh_token.txt
           git diff --staged --quiet || git commit -m "Sync Fitbit weight data [skip ci]"
           git push

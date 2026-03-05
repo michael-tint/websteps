@@ -1,12 +1,16 @@
 """
 fetch_fitbit.py — refresh Fitbit token and sync weight data into weight_data.json
+Refresh token is stored in fitbit_refresh_token.txt (committed to repo).
 """
 import json, os, urllib.request, urllib.parse, base64
 from datetime import date
 
 client_id     = os.environ["FITBIT_CLIENT_ID"]
 client_secret = os.environ["FITBIT_CLIENT_SECRET"]
-refresh_token = os.environ["FITBIT_REFRESH_TOKEN"]
+
+# Read refresh token from file
+with open("fitbit_refresh_token.txt") as f:
+    refresh_token = f.read().strip()
 
 # 1. Refresh the access token
 creds = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
@@ -17,16 +21,21 @@ req = urllib.request.Request(
         "refresh_token": refresh_token,
     }).encode(),
     headers={
-        "Authorization":  f"Basic {creds}",
-        "Content-Type":   "application/x-www-form-urlencoded",
+        "Authorization": f"Basic {creds}",
+        "Content-Type":  "application/x-www-form-urlencoded",
     },
 )
-tokens = json.loads(urllib.request.urlopen(req).read())
+try:
+    tokens = json.loads(urllib.request.urlopen(req).read())
+except urllib.error.HTTPError as e:
+    print(f"Token refresh failed — HTTP {e.code}: {e.read().decode()}")
+    raise
 access_token = tokens["access_token"]
 
-# Write new refresh token to file so the workflow can update the secret
-with open("new_refresh_token.txt", "w") as f:
+# Save new refresh token back to file
+with open("fitbit_refresh_token.txt", "w") as f:
     f.write(tokens["refresh_token"])
+print("Refresh token rotated.")
 
 # 2. Fetch weight logs (last 1 year)
 url = f"https://api.fitbit.com/1/user/-/body/log/weight/date/{date.today().strftime('%Y-%m-%d')}/1y.json"
@@ -35,7 +44,7 @@ req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_tok
 try:
     data = json.loads(urllib.request.urlopen(req).read())
 except urllib.error.HTTPError as e:
-    print(f"HTTP {e.code}: {e.read().decode()}")
+    print(f"Weight fetch failed — HTTP {e.code}: {e.read().decode()}")
     raise
 logs = data.get("weight", [])
 
