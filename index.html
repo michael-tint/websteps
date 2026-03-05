@@ -237,8 +237,6 @@
     <div class="controls">
       <label>From <input type="date" id="me-start" onchange="renderRaw('me')" /></label>
       <label>To &nbsp;&nbsp;<input type="date" id="me-end" onchange="renderRaw('me')" /></label>
-      <button class="save-btn" id="me-sync-btn" onclick="syncFitbitMe()">Sync Fitbit</button>
-      <span id="me-sync-status" style="font-size:0.8rem;color:#64748b"></span>
     </div>
     <div class="summary" id="me-cards"></div>
     <div class="table-wrap" style="flex:1;min-height:0;">
@@ -923,76 +921,6 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       tbody.innerHTML = [...rows].reverse().map(r =>
         `<tr>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}</tr>`
       ).join("");
-    }
-
-    // ── Fitbit sync ───────────────────────────────────────────────────────────
-    function rawUrl(file) {
-      const base = location.hostname === "localhost" ? "" : "https://raw.githubusercontent.com/michael-tint/websteps/main";
-      return (base ? base + "/" + file : "/" + file) + "?t=" + Date.now();
-    }
-
-    async function syncFitbitWorkflow(btn, statusEl, onComplete) {
-      let pat = localStorage.getItem("gh_pat");
-      if (!pat) {
-        pat = prompt("Enter a GitHub Personal Access Token with 'workflow' scope.\nIt will be saved locally for future use.");
-        if (!pat) return;
-        localStorage.setItem("gh_pat", pat.trim());
-      }
-      const ghHeaders = { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
-      const setStatus = (msg, color) => { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
-
-      btn.disabled = true;
-      setStatus("Starting sync…");
-
-      const triggerTime = new Date().toISOString();
-      const triggerRes = await fetch(
-        "https://api.github.com/repos/michael-tint/websteps/actions/workflows/fetch_fitbit.yml/dispatches",
-        { method: "POST", headers: ghHeaders, body: JSON.stringify({ ref: "main" }) }
-      );
-      if (triggerRes.status === 401) { localStorage.removeItem("gh_pat"); setStatus("Invalid token — cleared. Try again.", "#f87171"); btn.disabled = false; return; }
-      if (triggerRes.status !== 204) { setStatus(`Trigger failed (${triggerRes.status})`, "#f87171"); btn.disabled = false; return; }
-
-      setStatus("Waiting for workflow to start…");
-      let runId = null;
-      for (let i = 0; i < 15 && !runId; i++) {
-        await new Promise(r => setTimeout(r, 3000));
-        const run = ((await (await fetch("https://api.github.com/repos/michael-tint/websteps/actions/workflows/fetch_fitbit.yml/runs?per_page=1", { headers: ghHeaders })).json()).workflow_runs||[])[0];
-        if (run && run.created_at >= triggerTime) runId = run.id;
-      }
-      if (!runId) { setStatus("Couldn't find workflow run — check Actions tab.", "#f8c94b"); btn.disabled = false; return; }
-
-      const startedAt = Date.now();
-      let completed = false, conclusion = null;
-      for (let i = 0; i < 40 && !completed; i++) {
-        await new Promise(r => setTimeout(r, 5000));
-        const run = await (await fetch(`https://api.github.com/repos/michael-tint/websteps/actions/runs/${runId}`, { headers: ghHeaders })).json();
-        if (run.status === "completed") { completed = true; conclusion = run.conclusion; }
-        else setStatus(`Syncing… ${Math.round((Date.now() - startedAt) / 1000)}s`);
-      }
-      if (!completed) { setStatus("Timed out — check Actions tab.", "#f8c94b"); btn.disabled = false; return; }
-      if (conclusion !== "success") { setStatus(`Sync failed (${conclusion}) — check Actions tab.`, "#f87171"); btn.disabled = false; return; }
-
-      setStatus("Loading updated data…");
-      await onComplete(setStatus);
-      btn.disabled = false;
-    }
-
-    async function syncFitbitMe() {
-      const statusEl = document.getElementById("me-sync-status");
-      const btn      = document.getElementById("me-sync-btn");
-      await syncFitbitWorkflow(btn, statusEl, async (setStatus) => {
-        const rawBase   = location.hostname === "localhost" ? "" : "https://raw.githubusercontent.com/michael-tint/websteps/main";
-        const cacheBust = "?t=" + Date.now();
-        const meRes = await fetch(rawBase ? rawBase + "/me.json" + cacheBust : "/me.json").catch(() => null);
-        if (meRes?.ok) {
-          allData.me = await meRes.json();
-          document.getElementById("me-tbody").innerHTML = "";
-          renderRaw("me");
-          setStatus("Sync complete!", "#4ade80");
-        } else {
-          setStatus("Sync done — reload to see updates.", "#4ade80");
-        }
-      });
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
