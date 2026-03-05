@@ -1030,8 +1030,13 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       ).catch(() => null);
       if (meRes?.ok) {
         allData.me = (await meRes.json()).data;
+        globalMaxSteps = 0;
+        for (const r of allData.me) if (r.steps > globalMaxSteps) globalMaxSteps = r.steps;
         document.getElementById("me-tbody").innerHTML = "";
         renderRaw("me");
+        renderGym();
+        renderWeight();
+        renderDashboard();
         setStatus("Done!", "#4ade80");
       } else {
         setStatus("Done — reload to see updates.", "#4ade80");
