@@ -70,9 +70,13 @@ with open("weight_data.json", "w") as f:
 print(f"Weight: synced {len(weight_logs)} entries, daily_weight={daily_weight}")
 
 # 3. Fetch activity summary
-summary = fitbit_get(
-    f"https://api.fitbit.com/1/user/-/activities/date/{TARGET}.json"
-).get("summary", {})
+try:
+    summary = fitbit_get(
+        f"https://api.fitbit.com/1/user/-/activities/date/{TARGET}.json"
+    ).get("summary", {})
+except Exception as e:
+    print(f"Activity fetch failed ({e}) — skipping activity fields, weight_fitbit still synced")
+    summary = {}
 
 fitbit_fields = {
     "steps":                summary.get("steps"),
