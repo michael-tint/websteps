@@ -37,16 +37,22 @@ with open("fitbit_refresh_token.txt", "w") as f:
     f.write(tokens["refresh_token"])
 print("Refresh token rotated.")
 
-# 2. Fetch weight logs (last 1 year)
-url = f"https://api.fitbit.com/1/user/-/body/log/weight/date/{date.today().strftime('%Y-%m-%d')}/1y.json"
-print(f"Fetching: {url}")
-req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
-try:
-    data = json.loads(urllib.request.urlopen(req).read())
-except urllib.error.HTTPError as e:
-    print(f"Weight fetch failed — HTTP {e.code}: {e.read().decode()}")
-    raise
-logs = data.get("weight", [])
+# 2. Fetch weight logs (last year via two 6m calls)
+def fetch_weight(url):
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+    try:
+        return json.loads(urllib.request.urlopen(req).read()).get("weight", [])
+    except urllib.error.HTTPError as e:
+        print(f"Weight fetch failed — HTTP {e.code}: {e.read().decode()}")
+        raise
+
+today = date.today().strftime("%Y-%m-%d")
+from datetime import timedelta
+six_months_ago = (date.today() - timedelta(days=183)).strftime("%Y-%m-%d")
+
+logs  = fetch_weight(f"https://api.fitbit.com/1/user/-/body/log/weight/date/{today}/6m.json")
+logs += fetch_weight(f"https://api.fitbit.com/1/user/-/body/log/weight/date/{six_months_ago}/6m.json")
+print(f"Fetched {len(logs)} total weight logs")
 
 # 3. Load existing weight_data.json
 with open("weight_data.json", "r") as f:
