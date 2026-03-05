@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 14 * * *'  # 9am EST daily
+  push:
+    branches: [main]
+    paths: ['me.json']
 
 permissions:
   contents: write
