@@ -995,7 +995,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const triggerTime = new Date().toISOString();
       const triggerRes = await fetch(
         "https://api.github.com/repos/michael-tint/websteps/actions/workflows/fetch_fitbit.yml/dispatches",
-        { method: "POST", headers: ghHeaders, body: JSON.stringify({ ref: "main", inputs: { end_date: "" } }) }
+        { method: "POST", headers: ghHeaders, body: JSON.stringify({ ref: "main" }) }
       );
       if (triggerRes.status === 401) { localStorage.removeItem("gh_pat"); setStatus("Invalid token — cleared. Try again.", "#f87171"); btn.disabled = false; return; }
       if (triggerRes.status !== 204) { setStatus(`Trigger failed (${triggerRes.status})`, "#f87171"); btn.disabled = false; return; }
@@ -1020,7 +1020,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (!completed) { setStatus("Timed out — check Actions tab.", "#f8c94b"); btn.disabled = false; return; }
       if (conclusion !== "success") { setStatus(`Failed (${conclusion}) — check Actions tab.`, "#f87171"); btn.disabled = false; return; }
 
-      const meRes = await fetch("https://raw.githubusercontent.com/michael-tint/websteps/main/me.json?t=" + Date.now()).catch(() => null);
+      const meRes = await fetch("me.json?t=" + Date.now()).catch(() => null);
       if (meRes?.ok) {
         allData.me = (await meRes.json()).data;
         document.getElementById("me-tbody").innerHTML = "";
