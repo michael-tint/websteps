@@ -2,7 +2,7 @@
   "creds": {
     "client_id": "23TX78",
     "client_secret": "f6e2fe530460dbd77234afa6372f0183",
-    "refresh_token": "fac48f41d7c3c0835a444e71420c0e8ad0fe2eef4d10683e072154a5c72813d7"
+    "refresh_token": "10e983e866ef377e34c78f7c4dde2020862a199497d04e2354467d648b9061ee"
   },
   "data": [
     {
@@ -8398,6 +8398,10 @@
       "veryActiveMinutes": 49,
       "restingHeartRate": 80,
       "weight": 164.7
+    },
+    {
+      "date": "2026-03-05",
+      "weight": 164
     }
   ]
 }
