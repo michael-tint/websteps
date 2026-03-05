@@ -1,0 +1,10 @@
+*.xlsm
+*.bmp
+*.png
+__pycache__/
+*.py
+*.bat
+~$*
+export_data.py
+serve.py
+start.bat

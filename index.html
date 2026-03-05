@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebSteps</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 0.75rem 1.5rem 0.5rem;
+    }
+
+    h1 { font-size: 1.25rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.5rem; }
+
+    /* tabs */
+    .tabs { display: flex; gap: 0.4rem; border-bottom: 1px solid #334155; margin-bottom: 0.6rem; flex-shrink: 0; }
+    .tab { padding: 0.35rem 1rem; border-radius: 6px 6px 0 0; border: 1px solid transparent; border-bottom: none; cursor: pointer; font-size: 0.85rem; font-weight: 600; background: none; color: #64748b; }
+    .tab:hover { color: #cbd5e1; }
+    .tab.active { background: #1e293b; border-color: #334155; color: #f8fafc; margin-bottom: -1px; }
+
+    /* panels */
+    .panel { display: none; }
+
+    /* dashboard + gym: fills remaining height, no page scroll */
+    #panel-dashboard.active, #panel-gym.active {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* raw tabs: fill height and scroll */
+    #panel-me.active, #panel-mom.active, #panel-weight.active {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    /* weight table inputs */
+    .w-input {
+      background: #0f172a;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 0.18rem 0.4rem;
+      font-size: 0.8rem;
+      width: 6ch;
+      text-align: right;
+    }
+    .w-input.w-weight { width: 7ch; }
+    .w-input.gym-input {
+      width: 100%;
+      text-align: left;
+    }
+    .w-input:focus {
+      outline: none;
+      border-color: #60a5fa;
+    }
+    /* weight table column widths */
+    #weight-tbody td, #panel-weight table th { white-space: nowrap; text-align: left; }
+    #panel-weight table th:nth-child(1) { width: 7rem; }
+    #panel-weight table th:nth-child(2),
+    #panel-weight table th:nth-child(3),
+    #panel-weight table th:nth-child(4) { width: 5rem; }
+    #panel-weight table th:nth-child(5) { width: 12ch; }
+    #panel-weight table th:nth-child(6) { width: 6rem; }
+    #panel-weight table th:nth-child(7) { width: 6rem; }
+
+    /* raw tab controls */
+    .controls { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem; flex-shrink: 0; }
+    .controls label { font-size: 0.82rem; color: #94a3b8; }
+    input[type=date] { background: #1e293b; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; padding: 0.28rem 0.55rem; font-size: 0.82rem; }
+
+    .save-btn { background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 6px; padding: 0.28rem 0.8rem; font-size: 0.82rem; cursor: pointer; }
+    .save-btn:hover { color: #f8fafc; border-color: #475569; }
+
+    /* summary cards */
+    .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; margin-bottom: 0.6rem; flex-shrink: 0; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.55rem 0.8rem; }
+    .card-label { font-size: 0.7rem; color: #64748b; margin-bottom: 0.2rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .card-value { font-size: 1.15rem; font-weight: 700; color: #f8fafc; }
+    .card-value.blue  { color: #60a5fa; }
+    .card-value.pink  { color: #f472b6; }
+    .card-value.green { color: #4ade80; }
+    .card-value.red   { color: #f87171; }
+
+    /* dashboard main row */
+    .dash-main { display: flex; gap: 1rem; flex: 1; min-height: 0; }
+
+    /* pivot table LEFT */
+    .dash-table-wrap {
+      flex: 0 0 300px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      overflow-y: auto;
+      height: 100%;
+    }
+
+    /* chart RIGHT */
+    .chart-wrap {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 0.9rem 1rem 0.6rem;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .chart-title { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 0.4rem; text-align: center; flex-shrink: 0; }
+    .chart-wrap canvas { flex: 1; min-height: 0; }
+
+    /* shared table */
+    .table-wrap { background: #1e293b; border: 1px solid #334155; border-radius: 10px; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th { background: #0c1526; padding: 0.5rem 0.8rem; text-align: right; color: #64748b; font-weight: 600; position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+    th:first-child { text-align: left; }
+    td { padding: 0.35rem 0.8rem; text-align: right; border-top: 1px solid #0c1526; white-space: nowrap; }
+    td:first-child { text-align: left; }
+
+    /* pivot row levels */
+    #panel-gym table { font-size: 0.72rem; }
+    #panel-gym th { padding: 0.35rem 0.4rem; }
+    #panel-gym td { padding: 0.22rem 0.4rem; }
+    tr.row-year  > td             { background: #0c1526; border-top-color: #1e293b; }
+    tr.row-year  > td:first-child { font-weight: 700; color: #f8fafc; padding-left: 0.4rem; }
+    tr.row-month > td             { background: #1e293b; }
+    tr.row-month > td:first-child { font-weight: 600; color: #e2e8f0; padding-left: 1.0rem; }
+    tr.row-week  > td             { background: #192131; }
+    tr.row-week  > td:first-child { color: #94a3b8; padding-left: 1.8rem; }
+    tr.row-day   > td             { background: #141d2e; }
+    tr.row-day   > td:first-child { color: #64748b; padding-left: 2.6rem; }
+
+    tr.row-year:hover  > td { background: #172035; }
+    tr.row-month:hover > td { background: #253245; }
+    tr.row-week:hover  > td { background: #1d2a3d; }
+
+    tr.row-year, tr.row-month, tr.row-week { cursor: pointer; user-select: none; }
+    tr.row-year.open  > td:first-child { color: #93c5fd; }
+    tr.row-month.open > td:first-child { color: #60a5fa; }
+    tr.row-week.open  > td:first-child { color: #a5b4fc; }
+
+    tr.grand-total > td { border-top: 2px solid #334155; font-weight: 700; color: #f8fafc; padding: 0.35rem 0.4rem; background: #0c1526; }
+
+    .arrow { display: inline-block; width: 0.85rem; font-size: 0.58rem; opacity: 0.55; }
+    td.me  { color: #60a5fa; font-weight: 600; }
+    td.mom { color: #f472b6; font-weight: 600; }
+    .status { color: #475569; padding: 1.5rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem;">
+    <h1 style="margin-bottom:0">WebSteps</h1>
+    <div style="display:flex;gap:0.4rem;align-items:center;">
+      <span style="font-size:0.75rem;color:#64748b">Chart min</span>
+      <input type="text" inputmode="numeric" id="comp-min" value="120" oninput="updateCompChart()" style="width:4rem;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.9rem;text-align:right;">
+      <span style="font-size:0.75rem;color:#64748b">max</span>
+      <input type="text" inputmode="numeric" id="comp-max" value="190" oninput="updateCompChart()" style="width:4rem;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.9rem;text-align:right;">
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('gym',this)">Gym</button>
+    <button class="tab" onclick="switchTab('dashboard',this)">Steps</button>
+    <button class="tab" onclick="switchTab('weight',this)">Weight</button>
+    <button class="tab" onclick="switchTab('me',this)">Me</button>
+    <button class="tab" onclick="switchTab('mom',this)">Mom</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="panel-dashboard" class="panel">
+    <div class="summary" id="dash-cards"></div>
+    <div class="dash-main">
+      <div class="dash-table-wrap">
+        <table>
+          <thead><tr><th>Period</th><th>Me</th><th>Mom</th></tr></thead>
+          <tbody id="dash-tbody"></tbody>
+        </table>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title" id="chart-title">Avg steps / day</div>
+        <canvas id="stepsChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- GYM -->
+  <div id="panel-gym" class="panel active">
+    <div class="controls">
+      <button class="save-btn" onclick="saveGymView()">Save View</button>
+    </div>
+    <div class="summary" id="gym-cards"></div>
+    <div class="dash-main">
+      <div class="dash-table-wrap" style="flex:0 0 760px;overflow:auto;">
+        <table>
+          <thead><tr>
+            <th style="text-align:left;width:5rem">Period</th>
+            <th>Avg Wt</th>
+            <th>BMI</th>
+            <th>Max Wt</th>
+            <th>Max BMI</th>
+            <th>Bone</th>
+            <th>Muscle</th>
+            <th>Fat</th>
+            <th>Fat%</th>
+            <th>Steps</th>
+            <th>Sess/Wk</th>
+            <th>Avg Wt Δ</th>
+            <th>Max Wt Δ</th>
+          </tr></thead>
+          <tbody id="gym-tbody"></tbody>
+        </table>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title">Weight &amp; Body Composition</div>
+        <canvas id="gymChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ME -->
+  <div id="panel-me" class="panel">
+    <div class="controls">
+      <label>From <input type="date" id="me-start" onchange="renderRaw('me')" /></label>
+      <label>To &nbsp;&nbsp;<input type="date" id="me-end" onchange="renderRaw('me')" /></label>
+    </div>
+    <div class="summary" id="me-cards"></div>
+    <div class="table-wrap" style="flex:1;min-height:0;">
+      <table><thead><tr id="raw-head-me"></tr></thead><tbody id="me-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- MOM -->
+  <div id="panel-mom" class="panel">
+    <div class="controls">
+      <label>From <input type="date" id="mom-start" onchange="renderRaw('mom')" /></label>
+      <label>To &nbsp;&nbsp;<input type="date" id="mom-end" onchange="renderRaw('mom')" /></label>
+    </div>
+    <div class="summary" id="mom-cards"></div>
+    <div class="table-wrap" style="flex:1;min-height:0;">
+      <table><thead><tr id="raw-head-mom"></tr></thead><tbody id="mom-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- WEIGHT -->
+  <div id="panel-weight" class="panel">
+    <div class="summary" id="weight-cards"></div>
+    <div class="table-wrap" style="flex:1;min-height:0;">
+      <table>
+        <thead><tr>
+          <th>Date</th>
+          <th>Fat</th>
+          <th>Muscle</th>
+          <th>Bone</th>
+          <th>Gym</th>
+          <th>Weight</th>
+          <th>Steps</th>
+        </tr></thead>
+        <tbody id="weight-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let allData = {};
+    let weightData = {};
+    let stepsChart = null;
+    let globalMaxSteps = 0;
+    let expandedYears  = new Set();
+    let expandedMonths = new Set();
+    let expandedWeeks  = new Set();
+
+    const RAW_COLS = [
+      {key:"date",label:"Date"},{key:"steps",label:"Steps"},{key:"caloriesOut",label:"Calories"},
+      {key:"activityCalories",label:"Active Cal"},{key:"caloriesBMR",label:"BMR"},
+      {key:"restingHeartRate",label:"Heart Rate"},{key:"sedentaryMinutes",label:"Sedentary"},
+      {key:"lightlyActiveMinutes",label:"Light"},{key:"fairlyActiveMinutes",label:"Moderate"},
+      {key:"veryActiveMinutes",label:"Vigorous"},{key:"floors",label:"Floors"},
+    ];
+
+    // ── gym tab ───────────────────────────────────────────────────────────────
+    let gymExpandedYears  = new Set();
+    let gymExpandedMonths = new Set();
+    let gymExpandedWeeks  = new Set();
+    let gymChart = null;
+
+    function updateCompChart() {
+      if (!gymChart) return;
+      const mn = parseFloat(document.getElementById("comp-min").value);
+      const mx = parseFloat(document.getElementById("comp-max").value);
+      if (!isNaN(mn)) gymChart.options.scales.y.min = mn;
+      if (!isNaN(mx)) gymChart.options.scales.y.max = mx;
+      gymChart.update();
+    }
+    const HEIGHT_IN = 69;
+
+    function calcBMI(w)  { return w != null ? w * 703 / (HEIGHT_IN * HEIGHT_IN) : null; }
+    function calcFatPct(fat, muscle) { return (fat != null && muscle != null) ? fat / (fat + muscle) * 100 : null; }
+
+    function gymWeekStart(dateStr) {
+      const [y,m,d] = dateStr.split("-").map(Number);
+      const dt = new Date(y, m-1, d);
+      dt.setDate(dt.getDate() - dt.getDay()); // back to Sunday
+      return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+    }
+
+    // Aggregate a set of date entries: avg weight, BMI, max weight, max BMI, gym count,
+    // and the first composition measurement found (bone/muscle/fat)
+    function gymAggregate(entries) {
+      const weights = entries.map(e => e.weight).filter(v => v != null);
+      const avgWt   = weights.length ? weights.reduce((s,v)=>s+v,0)/weights.length : null;
+      const maxWt   = weights.length ? Math.max(...weights) : null;
+      const steps    = entries.reduce((s,e) => s + (e.steps||0), 0) || null;
+      const gymCount = entries.filter(e => e.gym).length;
+      const comp = entries.find(e => e.fat != null || e.muscle != null || e.bone != null);
+      return {
+        avgWt, maxWt, steps, gymCount,
+        bmi:    calcBMI(avgWt),
+        maxBMI: calcBMI(maxWt),
+        bone:   comp?.bone   ?? null,
+        muscle: comp?.muscle ?? null,
+        fat:    comp?.fat    ?? null,
+        fatPct: comp ? calcFatPct(comp.fat, comp.muscle) : null,
+      };
+    }
+
+    function gymCols(agg, ex={}) {
+      const f  = (v,d=1) => v != null ? fmt(v,d) : "";
+      const fp = v => v != null ? fmt(v,1)+"%" : "";
+      const fd = v => v == null ? "" : (v > 0 ? "+" : "") + Number(v).toLocaleString(undefined,{maximumFractionDigits:1,minimumFractionDigits:1});
+      const dc = v => v == null ? "" : v < 0 ? " class=\"green\"" : v > 0 ? " class=\"red\"" : "";
+      return `<td>${f(agg.avgWt)}</td><td>${f(agg.bmi)}</td>
+        <td>${f(agg.maxWt)}</td><td>${f(agg.maxBMI)}</td>
+        <td>${f(agg.bone)}</td><td>${f(agg.muscle)}</td>
+        <td>${f(agg.fat)}</td><td>${fp(agg.fatPct)}</td>
+        <td>${agg.steps != null ? fmt(agg.steps,0) : ""}</td>
+        <td>${f(ex.sessPerWk,1)}</td>
+        <td${dc(ex.avgWtDelta)}>${fd(ex.avgWtDelta)}</td>
+        <td${dc(ex.maxWtDelta)}>${fd(ex.maxWtDelta)}</td>`;
+    }
+
+    function renderGym() {
+      const today      = todayEST();
+      const weekStart  = weekStartEST();
+      const monthStart = monthStartEST();
+
+      // Steps lookup from fitbit data
+      const meByDate = {};
+      for (const r of allData.me || []) meByDate[r.date] = r.steps;
+
+      // All entries from weightData, oldest first for tree building
+      const allEntries = Object.entries(weightData)
+        .filter(([d]) => d <= today)
+        .sort(([a],[b]) => a < b ? -1 : 1)
+        .map(([date, e]) => ({ date, ...e, steps: meByDate[date] ?? null }));
+
+      const totalGym   = allEntries.filter(e => e.gym).length;
+      const weekGym    = allEntries.filter(e => e.gym && e.date >= weekStart && e.date <= today).length;
+      const monthGym   = allEntries.filter(e => e.gym && e.date >= monthStart && e.date <= today).length;
+      const wtEntries  = allEntries.filter(e => e.weight != null);
+      const latestWt   = wtEntries.length ? wtEntries[wtEntries.length-1].weight : null;
+      const firstWt    = wtEntries.length ? wtEntries[0].weight : null;
+      const cumDelta   = (latestWt != null && firstWt != null) ? latestWt - firstWt : null;
+      const prevWeekWt = [...wtEntries].reverse().find(e => e.date < weekStart)?.weight ?? null;
+      const prevMonWt  = [...wtEntries].reverse().find(e => e.date < monthStart)?.weight ?? null;
+      const lossWeek   = (latestWt != null && prevWeekWt  != null) ? latestWt - prevWeekWt  : null;
+      const lossMon    = (latestWt != null && prevMonWt   != null) ? latestWt - prevMonWt   : null;
+
+      function fmtDelta(n) {
+        if (n == null) return "—";
+        return (n > 0 ? "+" : "") + Number(n).toLocaleString(undefined,{maximumFractionDigits:1,minimumFractionDigits:1});
+      }
+      function deltaClass(n) { return n == null ? "" : n < 0 ? "green" : n > 0 ? "red" : ""; }
+
+      document.getElementById("gym-cards").innerHTML = `
+        <div class="card"><div class="card-label">Latest Weight</div><div class="card-value blue">${latestWt != null ? fmt(latestWt,1) : "—"}</div></div>
+        <div class="card"><div class="card-label">Weight Delta</div><div class="card-value ${deltaClass(cumDelta)}">${fmtDelta(cumDelta)}</div></div>
+        <div class="card"><div class="card-label">Loss This Week</div><div class="card-value ${deltaClass(lossWeek)}">${fmtDelta(lossWeek)}</div></div>
+        <div class="card"><div class="card-label">Loss This Month</div><div class="card-value ${deltaClass(lossMon)}">${fmtDelta(lossMon)}</div></div>
+      `;
+
+      // Build year > month > week > day tree
+      // Week belongs to the month/year of its Monday (week start), not the individual day's month
+      const tree = {};
+      for (const e of allEntries) {
+        const week      = gymWeekStart(e.date);
+        const year      = week.slice(0,4);
+        const month     = week.slice(0,7);
+        if (!tree[year])              tree[year] = {};
+        if (!tree[year][month])       tree[year][month] = {};
+        if (!tree[year][month][week]) tree[year][month][week] = [];
+        tree[year][month][week].push(e);
+      }
+
+      // On first render: restore saved view or default to week level
+      if (!gymExpandedYears.size) {
+        const saved = localStorage.getItem("gymView");
+        if (saved) {
+          const s = JSON.parse(saved);
+          s.years.forEach(y => gymExpandedYears.add(y));
+          s.months.forEach(m => gymExpandedMonths.add(m));
+          s.weeks.forEach(w => gymExpandedWeeks.add(w));
+        } else {
+          for (const y of Object.keys(tree)) gymExpandedYears.add(y);
+          for (const y of Object.keys(tree))
+            for (const m of Object.keys(tree[y])) gymExpandedMonths.add(m);
+        }
+      }
+
+      // Precompute all week aggregates for delta lookups
+      const allWeekAggs = {};
+      for (const y of Object.keys(tree))
+        for (const m of Object.keys(tree[y]))
+          for (const w of Object.keys(tree[y][m]))
+            allWeekAggs[w] = gymAggregate(tree[y][m][w]);
+      const sortedWeeks = Object.keys(allWeekAggs).sort();
+
+      const grand = gymAggregate(allEntries);
+      const years = Object.keys(tree).sort(); // ascending
+      let html = "";
+      const emptyCols = `<td></td>`.repeat(12);
+      const chartItems = []; // { label, weeks[] } — leaves of the visible tree
+
+      // avg-of-week-averages for a set of week keys
+      function weekAvgWt(weeks) {
+        const v = weeks.map(w => allWeekAggs[w]?.avgWt).filter(x => x != null);
+        return v.length ? v.reduce((s,x)=>s+x,0)/v.length : null;
+      }
+      function weekAvgMax(weeks) {
+        const v = weeks.map(w => allWeekAggs[w]?.maxWt).filter(x => x != null);
+        return v.length ? v.reduce((s,x)=>s+x,0)/v.length : null;
+      }
+
+      for (const year of years) {
+        const yOpen = gymExpandedYears.has(year);
+        html += `<tr class="row-year${yOpen?" open":""}" onclick="toggleGymYear('${year}')">
+          <td><span class="arrow">${yOpen?"▼":"▶"}</span>${year}</td>${emptyCols}</tr>`;
+        if (!yOpen) {
+          const yWeeks = Object.values(tree[year]).flatMap(m => Object.keys(m));
+          const yComp = Object.values(tree[year]).flatMap(m => Object.values(m)).flat().reverse().find(e => e.fat != null);
+          chartItems.push({ label: year, weeks: yWeeks, bone: yComp?.bone??null, muscle: yComp?.muscle??null, fat: yComp?.fat??null });
+          continue;
+        }
+
+        for (const month of Object.keys(tree[year]).sort()) {
+          const mEntries = Object.values(tree[year][month]).flat();
+          const mAgg = gymAggregate(mEntries);
+          const mOpen = gymExpandedMonths.has(month);
+          const [,mm] = month.split("-");
+          const mLabel = new Date(2000,+mm-1).toLocaleString("default",{month:"short"});
+          const mWeekCount = Object.keys(tree[year][month]).length;
+          const mEx = { sessPerWk: mWeekCount ? mAgg.gymCount / mWeekCount : null };
+          html += `<tr class="row-month${mOpen?" open":""}" onclick="toggleGymMonth('${month}')">
+            <td><span class="arrow">${mOpen?"▼":"▶"}</span>${mLabel}</td>${gymCols(mAgg, mEx)}</tr>`;
+          if (!mOpen) {
+            const mComp = mEntries.slice().reverse().find(e => e.fat != null);
+            chartItems.push({ label: mLabel, weeks: Object.keys(tree[year][month]), bone: mComp?.bone??null, muscle: mComp?.muscle??null, fat: mComp?.fat??null });
+            continue;
+          }
+
+          for (const week of Object.keys(tree[year][month]).sort()) {
+            const wEntries = tree[year][month][week];
+            const wAgg = allWeekAggs[week];
+            const wOpen = gymExpandedWeeks.has(week);
+            const [wy,wm,wd] = week.split("-").map(Number);
+            const wLabel = new Date(wy,wm-1,wd).toLocaleString("default",{month:"short",day:"numeric"});
+            const wi = sortedWeeks.indexOf(week);
+            const prevAgg = wi > 0 ? allWeekAggs[sortedWeeks[wi-1]] : null;
+            const wEx = {
+              sessPerWk: wAgg.gymCount,
+              avgWtDelta: (wAgg.avgWt != null && prevAgg?.avgWt != null) ? wAgg.avgWt - prevAgg.avgWt : null,
+              maxWtDelta: (wAgg.maxWt != null && prevAgg?.maxWt != null) ? wAgg.maxWt - prevAgg.maxWt : null,
+            };
+            html += `<tr class="row-week${wOpen?" open":""}" onclick="toggleGymWeek('${week}')">
+              <td><span class="arrow">${wOpen?"▼":"▶"}</span>${wLabel}</td>${gymCols(wAgg, wEx)}</tr>`;
+            if (!wOpen) {
+              const wComp = wEntries.slice().reverse().find(e => e.fat != null);
+              chartItems.push({ label: wLabel, weeks: [week], bone: wComp?.bone??null, muscle: wComp?.muscle??null, fat: wComp?.fat??null });
+            }
+            if (!wOpen) continue;
+
+            for (const e of wEntries) {
+              const [dy,dm,dd] = e.date.split("-").map(Number);
+              const dLabel = new Date(dy,dm-1,dd).toLocaleString("default",{month:"short",day:"numeric"});
+              html += `<tr class="row-day">
+                <td><span class="arrow"></span>${dLabel}</td>${gymCols(gymAggregate([e]))}</tr>`;
+            }
+          }
+        }
+      }
+      html += `<tr class="grand-total"><td>Grand Total</td>${gymCols(grand)}</tr>`;
+      document.getElementById("gym-tbody").innerHTML = html;
+
+      // Combined chart — stacked bars (bone/muscle/fat) + lines (avg/max weight)
+      const chartLabels = chartItems.map(i => i.label);
+      const avgWts = chartItems.map(i => weekAvgWt(i.weeks));
+      const maxWts = chartItems.map(i => weekAvgMax(i.weeks));
+      const compMin = parseFloat(document.getElementById("comp-min").value) || 120;
+      const compMax = parseFloat(document.getElementById("comp-max").value) || 190;
+      const sessData = chartItems.map(i => {
+        const total = i.weeks.reduce((s,w) => s + (allWeekAggs[w]?.gymCount || 0), 0);
+        return i.weeks.length ? total / i.weeks.length : null;
+      });
+      if (gymChart) gymChart.destroy();
+      gymChart = new Chart(document.getElementById("gymChart"), {
+        data: {
+          labels: chartLabels,
+          datasets: [
+            { type: "line", label: "Sessions", data: sessData, yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderColor: "transparent", borderWidth: 0, fill: true, stepped: true, pointRadius: 0, order: 4 },
+            { type: "bar",  label: "Bone",   data: chartItems.map(i => i.bone),   backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp", order: 2 },
+            { type: "bar",  label: "Muscle", data: chartItems.map(i => i.muscle), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp", order: 2 },
+            { type: "bar",  label: "Fat",    data: chartItems.map(i => i.fat),    backgroundColor: "rgba(244,114,182,0.80)", stack: "comp", order: 2 },
+            { type: "line", label: "Avg Wt", data: avgWts, borderColor: "rgba(255,255,255,0.85)", backgroundColor: "transparent", borderWidth: 2, pointRadius: 2, tension: 0.3, order: 1 },
+            { type: "line", label: "Max Wt", data: maxWts, borderColor: "rgba(148,163,184,0.7)",  backgroundColor: "transparent", borderWidth: 1.5, pointRadius: 2, tension: 0.3, borderDash: [4,3], order: 1 },
+          ],
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: "#94a3b8" } },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}` } },
+          },
+          scales: {
+            x: { ticks: { color: "#64748b", maxRotation: 45 }, grid: { color: "#1e293b" } },
+            y:  { min: compMin, max: compMax, ticks: { color: "#64748b", callback: v => fmt(v,1) }, grid: { color: "#334155" } },
+            y2: { min: 0, max: 7, position: "right", ticks: { color: "#64748b", stepSize: 1 }, grid: { drawOnChartArea: false } },
+          },
+        },
+      });
+    }
+
+    function toggleGymYear(year) {
+      if (gymExpandedYears.has(year)) {
+        gymExpandedYears.delete(year);
+        for (const m of [...gymExpandedMonths]) if (m.startsWith(year)) {
+          gymExpandedMonths.delete(m);
+          for (const w of [...gymExpandedWeeks]) if (w.startsWith(m)) gymExpandedWeeks.delete(w);
+        }
+      } else {
+        gymExpandedYears.add(year);
+        // Re-expand all months in this year (using week-start month keys)
+        for (const d of Object.keys(weightData)) {
+          const w = gymWeekStart(d);
+          if (w.startsWith(year)) gymExpandedMonths.add(w.slice(0,7));
+        }
+      }
+      renderGym();
+    }
+    function toggleGymMonth(month) {
+      if (gymExpandedMonths.has(month)) {
+        gymExpandedMonths.delete(month);
+        for (const w of [...gymExpandedWeeks]) if (w.startsWith(month)) gymExpandedWeeks.delete(w);
+      } else { gymExpandedMonths.add(month); }
+      renderGym();
+    }
+    function toggleGymWeek(week) {
+      gymExpandedWeeks.has(week) ? gymExpandedWeeks.delete(week) : gymExpandedWeeks.add(week);
+      renderGym();
+    }
+    function saveGymView() {
+      localStorage.setItem("gymView", JSON.stringify({
+        years:  [...gymExpandedYears],
+        months: [...gymExpandedMonths],
+        weeks:  [...gymExpandedWeeks],
+      }));
+      const btn = document.querySelector(".save-btn");
+      btn.textContent = "Saved ✓";
+      setTimeout(() => btn.textContent = "Save View", 1500);
+    }
+
+    // ── init ──────────────────────────────────────────────────────────────────
+    async function init() {
+      const [dataRes, weightRes] = await Promise.all([
+        fetch("data.json"),
+        fetch("weight_data.json").catch(() => null),
+      ]);
+      allData = await dataRes.json();
+      const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
+      const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
+      // localStorage overrides static file
+      weightData = Object.assign({}, staticWeight, localWeight);
+
+      // Global max for fixed Y axis
+      for (const r of [...(allData.me||[]), ...(allData.mom||[])])
+        if (r.steps > globalMaxSteps) globalMaxSteps = r.steps;
+
+      // Expand all years by default → opens to month level
+      for (const r of [...(allData.me||[]), ...(allData.mom||[])])
+        expandedYears.add(r.date.slice(0,4));
+
+      for (const user of ["me","mom"]) {
+        const dates = (allData[user]||[]).map(r=>r.date).sort();
+        if (dates.length) {
+          document.getElementById(`${user}-start`).value = dates[0];
+          document.getElementById(`${user}-end`).value   = dates[dates.length-1];
+        }
+        document.getElementById(`raw-head-${user}`).innerHTML = RAW_COLS.map(c=>`<th>${c.label}</th>`).join("");
+      }
+      renderDashboard();
+
+      // Restore last-visited tab (default is gym)
+      const lastTab = localStorage.getItem("lastTab") || "gym";
+      if (lastTab !== "gym") {
+        const btn = [...document.querySelectorAll(".tab")].find(b => b.getAttribute("onclick").includes(`'${lastTab}'`));
+        if (btn) switchTab(lastTab, btn);
+      } else {
+        renderGym();
+      }
+    }
+
+    // ── tab switching ─────────────────────────────────────────────────────────
+    function switchTab(name, btn) {
+      document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById(`panel-${name}`).classList.add("active");
+      localStorage.setItem("lastTab", name);
+      if (name==="me"     && !document.getElementById("me-tbody").innerHTML)     renderRaw("me");
+      if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    renderRaw("mom");
+      if (name==="weight") renderWeight();
+      if (name==="gym")    renderGym();
+    }
+
+    // ── EST date helpers ──────────────────────────────────────────────────────
+    function todayEST() {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+    }
+    function weekStartEST() {
+      const s = todayEST();
+      const [y,m,d] = s.split("-").map(Number);
+      const dt = new Date(y, m-1, d);
+      const dow = dt.getDay(); // 0=Sun
+      dt.setDate(dt.getDate() - (dow === 0 ? 6 : dow - 1)); // back to Monday
+      return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+    }
+    function monthStartEST() {
+      return todayEST().slice(0,8) + "01";
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+    function fmt(n, dec=0) {
+      if (n==null) return "—";
+      return Number(n).toLocaleString(undefined,{maximumFractionDigits:dec});
+    }
+    function avgSteps(rows) {
+      const v=rows.filter(r=>r.steps!=null);
+      return v.length ? v.reduce((s,r)=>s+r.steps,0)/v.length : null;
+    }
+    function groupBy(rows, fn) {
+      const m={};
+      for (const r of rows) { const k=fn(r); (m[k]=m[k]||[]).push(r); }
+      return m;
+    }
+    function mergeKeys(...maps) {
+      return [...new Set(maps.flatMap(m=>Object.keys(m)))].sort();
+    }
+    function labelYear(y)   { return y; }
+    function labelMonth(ym) { const [y,m]=ym.split("-"); return new Date(+y,+m-1).toLocaleString("default",{month:"short"}); }
+    function labelWeek(iso) { const [y,m,d]=iso.split("-"); return new Date(+y,+m-1,+d).toLocaleString("default",{month:"short",day:"numeric"}); }
+    function labelDay(iso)  { const [y,m,d]=iso.split("-"); return new Date(+y,+m-1,+d).toLocaleString("default",{month:"short",day:"numeric"}); }
+
+    // ── reference average (next level up) ────────────────────────────────────
+    function computeRef(user, item) {
+      const rows = allData[user] || [];
+      if (item.type === 'year') {
+        return avgSteps(rows);
+      }
+      if (item.type === 'month') {
+        const [y, m] = item.key.split('-');
+        const qStart = Math.floor((+m-1)/3)*3+1;
+        return avgSteps(rows.filter(r => {
+          if (!r.date.startsWith(y)) return false;
+          const mo = +r.date.slice(5,7);
+          return mo >= qStart && mo < qStart+3;
+        }));
+      }
+      if (item.type === 'week') {
+        return avgSteps(rows.filter(r => r.date.startsWith(item.monthKey)));
+      }
+      if (item.type === 'day') {
+        return avgSteps(rows.filter(r => r.week === item.weekKey));
+      }
+      return null;
+    }
+
+    // ── build flat item list ──────────────────────────────────────────────────
+    function buildItems() {
+      const items = [];
+      const meAll  = allData.me  || [];
+      const momAll = allData.mom || [];
+      const meYears  = groupBy(meAll,  r=>r.date.slice(0,4));
+      const momYears = groupBy(momAll, r=>r.date.slice(0,4));
+      const years    = mergeKeys(meYears, momYears);
+
+      for (const year of years) {
+        const meY  = meYears[year]  || [];
+        const momY = momYears[year] || [];
+        if (!expandedYears.has(year)) {
+          items.push({ type:"year", key:year, label:labelYear(year), me:avgSteps(meY), mom:avgSteps(momY) });
+          continue;
+        }
+        items.push({ type:"year", key:year, label:labelYear(year), me:avgSteps(meY), mom:avgSteps(momY), open:true });
+
+        const meMonths  = groupBy(meY,  r=>r.date.slice(0,7));
+        const momMonths = groupBy(momY, r=>r.date.slice(0,7));
+        const months    = mergeKeys(meMonths, momMonths);
+
+        for (const month of months) {
+          const meM  = meMonths[month]  || [];
+          const momM = momMonths[month] || [];
+          if (!expandedMonths.has(month)) {
+            items.push({ type:"month", key:month, label:labelMonth(month), me:avgSteps(meM), mom:avgSteps(momM) });
+            continue;
+          }
+          items.push({ type:"month", key:month, label:labelMonth(month), me:avgSteps(meM), mom:avgSteps(momM), open:true });
+
+          const meWeeks  = groupBy(meM.filter(r=>r.date.startsWith(month)),  r=>r.week);
+          const momWeeks = groupBy(momM.filter(r=>r.date.startsWith(month)), r=>r.week);
+          const weeks    = mergeKeys(meWeeks, momWeeks);
+
+          for (const week of weeks) {
+            const meW  = meWeeks[week]  || [];
+            const momW = momWeeks[week] || [];
+            if (!expandedWeeks.has(week)) {
+              items.push({ type:"week", key:week, label:labelWeek(week), me:avgSteps(meW), mom:avgSteps(momW), monthKey:month });
+              continue;
+            }
+            items.push({ type:"week", key:week, label:labelWeek(week), me:avgSteps(meW), mom:avgSteps(momW), monthKey:month, open:true });
+
+            const meD={}, momD={};
+            for (const r of meAll)  if (r.week===week) meD[r.date]=r;
+            for (const r of momAll) if (r.week===week) momD[r.date]=r;
+            const days = mergeKeys(meD, momD);
+            for (const day of days)
+              items.push({ type:"day", key:day, label:labelDay(day), me:meD[day]?.steps??null, mom:momD[day]?.steps??null, weekKey:week, monthKey:month });
+          }
+        }
+      }
+      return items;
+    }
+
+    // ── toggle handlers ───────────────────────────────────────────────────────
+    function toggleYear(year) {
+      if (expandedYears.has(year)) {
+        expandedYears.delete(year);
+        for (const m of [...expandedMonths]) if (m.startsWith(year)) {
+          expandedMonths.delete(m);
+          for (const w of [...expandedWeeks]) if (w.startsWith(m)) expandedWeeks.delete(w);
+        }
+      } else { expandedYears.add(year); }
+      render();
+    }
+    function toggleMonth(month) {
+      if (expandedMonths.has(month)) {
+        expandedMonths.delete(month);
+        for (const w of [...expandedWeeks]) if (w.startsWith(month)) expandedWeeks.delete(w);
+      } else { expandedMonths.add(month); }
+      render();
+    }
+    function toggleWeek(week) {
+      expandedWeeks.has(week) ? expandedWeeks.delete(week) : expandedWeeks.add(week);
+      render();
+    }
+
+    // ── render pivot table ────────────────────────────────────────────────────
+    function renderPivotTable(items) {
+      const toggleFn = { year:"toggleYear", month:"toggleMonth", week:"toggleWeek" };
+      let html = "";
+      for (const item of items) {
+        if (item.type==="day") {
+          html += `<tr class="row-day"><td><span class="arrow"></span>${item.label}</td><td class="me">${fmt(item.me)}</td><td class="mom">${fmt(item.mom)}</td></tr>`;
+        } else {
+          const arrow = item.open ? "▼" : "▶";
+          html += `<tr class="row-${item.type}${item.open?" open":""}" onclick="${toggleFn[item.type]}('${item.key}')">
+            <td><span class="arrow">${arrow}</span>${item.label}</td>
+            <td class="me">${fmt(item.me)}</td><td class="mom">${fmt(item.mom)}</td>
+          </tr>`;
+        }
+      }
+      const meGrand = avgSteps(allData.me||[]), momGrand = avgSteps(allData.mom||[]);
+      html += `<tr class="grand-total"><td>Grand Total</td><td class="me">${fmt(meGrand)}</td><td class="mom">${fmt(momGrand)}</td></tr>`;
+      document.getElementById("dash-tbody").innerHTML = html;
+    }
+
+    // ── render chart ──────────────────────────────────────────────────────────
+    function renderChart(items) {
+      const leaves = items.filter(i => !i.open);
+
+      // Always 4-row labels so x-axis height never shifts on expand/collapse
+      const labels = leaves.map(i =>
+        i.type === 'week' ? ['', i.label, '', ''] :
+        i.type === 'day'  ? ['', '', i.label, ''] :
+        [i.label, '', '', '']
+      );
+      const me    = leaves.map(i => i.me);
+      const mom   = leaves.map(i => i.mom);
+      const meRef = leaves.map(i => computeRef('me',  i));
+      const momRef= leaves.map(i => computeRef('mom', i));
+
+      if (stepsChart) stepsChart.destroy();
+      stepsChart = new Chart(document.getElementById("stepsChart"), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            // Reference areas behind bars (higher order = drawn first/behind)
+            {
+              type:"line", label:"_ref_me", data:meRef,
+              backgroundColor:"rgba(96,165,250,0.22)",
+              borderColor:"rgba(96,165,250,0.55)", borderWidth:1.5,
+              fill:"origin", pointRadius:0, pointHoverRadius:0,
+              tension:0.4, order:2,
+            },
+            {
+              type:"line", label:"_ref_mom", data:momRef,
+              backgroundColor:"rgba(244,114,182,0.22)",
+              borderColor:"rgba(244,114,182,0.55)", borderWidth:1.5,
+              fill:"origin", pointRadius:0, pointHoverRadius:0,
+              tension:0.4, order:2,
+            },
+            // Bars on top
+            { label:"Me",  data:me,  backgroundColor:"rgba(96,165,250,0.80)",  borderWidth:0, borderRadius:3, order:1 },
+            { label:"Mom", data:mom, backgroundColor:"rgba(244,114,182,0.80)", borderWidth:0, borderRadius:3, order:1 },
+          ],
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: {
+                color: "#94a3b8",
+                filter: item => !item.text.startsWith("_ref_"),
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: ctx => ctx.dataset.label.startsWith("_ref_") ? null
+                  : ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} steps`,
+              }
+            },
+          },
+          scales: {
+            x: { ticks:{ color:"#64748b", maxRotation:45 }, grid:{ color:"#1e293b" } },
+            y: {
+              beginAtZero: true,
+              suggestedMax: Math.round(globalMaxSteps * 1.08),
+              ticks:{ color:"#64748b", callback:v=>fmt(v) },
+              grid:{ color:"#334155" },
+              title:{ display:true, text:"Steps", color:"#64748b" },
+            },
+          },
+        },
+      });
+    }
+
+    // ── main render ───────────────────────────────────────────────────────────
+    function render() {
+      const items = buildItems();
+      renderPivotTable(items);
+      renderChart(items);
+    }
+
+    function renderDashboard() {
+      const meAll = allData.me||[], momAll = allData.mom||[];
+      document.getElementById("dash-cards").innerHTML = `
+        <div class="card"><div class="card-label">Me — avg steps/day</div><div class="card-value blue">${fmt(avgSteps(meAll))}</div></div>
+        <div class="card"><div class="card-label">Mom — avg steps/day</div><div class="card-value pink">${fmt(avgSteps(momAll))}</div></div>
+        <div class="card"><div class="card-label">Me — total steps</div><div class="card-value blue">${fmt(meAll.reduce((s,r)=>s+(r.steps||0),0))}</div></div>
+        <div class="card"><div class="card-label">Mom — total steps</div><div class="card-value pink">${fmt(momAll.reduce((s,r)=>s+(r.steps||0),0))}</div></div>
+      `;
+      render();
+    }
+
+    // ── raw data tabs ─────────────────────────────────────────────────────────
+    function renderRaw(user) {
+      const start = document.getElementById(`${user}-start`).value;
+      const end   = document.getElementById(`${user}-end`).value;
+      const rows  = (allData[user]||[]).filter(r=>(!start||r.date>=start)&&(!end||r.date<=end));
+      const hrRows = rows.filter(r=>r.restingHeartRate);
+      const avg = key=>rows.reduce((s,r)=>s+(r[key]||0),0)/(rows.length||1);
+      document.getElementById(`${user}-cards`).innerHTML = `
+        <div class="card"><div class="card-label">Days</div><div class="card-value">${fmt(rows.length)}</div></div>
+        <div class="card"><div class="card-label">Avg Steps/Day</div><div class="card-value">${fmt(avg("steps"))}</div></div>
+        <div class="card"><div class="card-label">Total Steps</div><div class="card-value">${fmt(rows.reduce((s,r)=>s+(r.steps||0),0))}</div></div>
+        <div class="card"><div class="card-label">Avg Calories</div><div class="card-value">${fmt(avg("caloriesOut"))}</div></div>
+        <div class="card"><div class="card-label">Avg Heart Rate</div><div class="card-value">${hrRows.length?fmt(hrRows.reduce((s,r)=>s+r.restingHeartRate,0)/hrRows.length,1):"—"}</div></div>
+        <div class="card"><div class="card-label">Avg Active Min</div><div class="card-value">${fmt(avg("fairlyActiveMinutes")+avg("veryActiveMinutes"))}</div></div>
+      `;
+      const tbody = document.getElementById(`${user}-tbody`);
+      if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length}" class="status">No data.</td></tr>`; return; }
+      tbody.innerHTML = [...rows].reverse().map(r=>`<tr>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}</tr>`).join("");
+    }
+
+    // ── weight tab ────────────────────────────────────────────────────────────
+    function saveWeightData() {
+      localStorage.setItem("weightData", JSON.stringify(weightData));
+      // TODO: replace with API call when backend is ready
+    }
+
+    function updateWeight(date, field, value) {
+      if (!weightData[date]) weightData[date] = {};
+      const trimmed = value.trim();
+      if (trimmed === "") {
+        delete weightData[date][field];
+        if (Object.keys(weightData[date]).length === 0) delete weightData[date];
+      } else {
+        weightData[date][field] = field === "gym" ? trimmed : parseFloat(trimmed);
+      }
+      saveWeightData();
+    }
+
+    function handleWeightEnter(event, date, field) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      const all = [...document.querySelectorAll(`input[data-field="${field}"]`)];
+      const idx = all.findIndex(el => el.dataset.date === date);
+      if (idx >= 0 && idx < all.length - 1) {
+        all[idx + 1].focus();
+        all[idx + 1].select();
+      }
+    }
+
+    function inp(date, field, cls, mergedData) {
+      const w   = mergedData[date];
+      const val = w?.[field];
+      const v   = val != null ? String(val).replace(/"/g, "&quot;") : "";
+      return `<input class="w-input ${cls}" type="text" value="${v}"
+        data-date="${date}" data-field="${field}"
+        onblur="updateWeight('${date}','${field}',this.value)"
+        onkeydown="handleWeightEnter(event,'${date}','${field}')" />`;
+    }
+
+    function renderWeight() {
+      const meByDate = {};
+      for (const r of allData.me || []) meByDate[r.date] = r.steps;
+
+      // Merge spreadsheet weight data (base) with weightData JSON (overrides)
+      const sheet = allData.weightSheet || {};
+      const mergedData = {};
+      for (const date of new Set([...Object.keys(sheet), ...Object.keys(weightData)])) {
+        mergedData[date] = { ...(sheet[date] || {}), ...(weightData[date] || {}) };
+      }
+
+      // All dates: every day from earliest known date up to today (EST), newest first
+      const today = todayEST();
+      const knownDates = [...Object.keys(mergedData), ...Object.keys(meByDate)];
+      const earliest = knownDates.reduce((a,b) => a < b ? a : b);
+      const allDates = [];
+      const [ty,tm,td] = today.split("-").map(Number);
+      for (let d = new Date(ty, tm-1, td); ; d.setDate(d.getDate() - 1)) {
+        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+        allDates.push(iso);
+        if (iso <= earliest) break;
+      }
+
+      // Summary cards
+      const withWeight  = allDates.filter(d => mergedData[d]?.weight != null);
+      const latestW     = withWeight.length ? mergedData[withWeight[0]].weight : null;
+      const weekStart   = weekStartEST();
+      const monthStart  = monthStartEST();
+      const prevWeekEntry  = withWeight.find(d => d < weekStart);
+      const prevMonthEntry = withWeight.find(d => d < monthStart);
+      const weekDelta   = (latestW != null && prevWeekEntry  != null) ? latestW - mergedData[prevWeekEntry].weight  : null;
+      const monthDelta  = (latestW != null && prevMonthEntry != null) ? latestW - mergedData[prevMonthEntry].weight : null;
+      function fmtDelta(n) {
+        if (n == null) return "—";
+        return (n > 0 ? "+" : "") + Number(n).toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+      }
+      function deltaClass(n) { return n == null ? "" : n < 0 ? "green" : n > 0 ? "red" : ""; }
+      document.getElementById("weight-cards").innerHTML = `
+        <div class="card"><div class="card-label">Latest Weight</div><div class="card-value blue">${latestW != null ? fmt(latestW,1) : "—"}</div></div>
+        <div class="card"><div class="card-label">Week Delta</div><div class="card-value ${deltaClass(weekDelta)}">${fmtDelta(weekDelta)}</div></div>
+        <div class="card"><div class="card-label">Month Delta</div><div class="card-value ${deltaClass(monthDelta)}">${fmtDelta(monthDelta)}</div></div>
+      `;
+
+      document.getElementById("weight-tbody").innerHTML = allDates.map(date => {
+        const steps = meByDate[date] != null ? fmt(meByDate[date]) : "—";
+        return `<tr>
+          <td style="text-align:left;color:#94a3b8">${date}</td>
+          <td>${inp(date,"fat","",mergedData)}</td>
+          <td>${inp(date,"muscle","",mergedData)}</td>
+          <td>${inp(date,"bone","",mergedData)}</td>
+          <td>${inp(date,"gym","gym-input",mergedData)}</td>
+          <td>${inp(date,"weight","w-weight",mergedData)}</td>
+          <td style="color:#94a3b8;text-align:right">${steps}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    init();
+  </script>
+</body>
+</html>
