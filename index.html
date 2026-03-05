@@ -85,6 +85,8 @@
 
     .save-btn { background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 6px; padding: 0.28rem 0.8rem; font-size: 0.82rem; cursor: pointer; }
     .save-btn:hover { color: #f8fafc; border-color: #475569; }
+    .del-btn { background: none; border: none; color: #475569; font-size: 0.78rem; cursor: pointer; padding: 0 0.3rem; line-height: 1; }
+    .del-btn:hover { color: #f87171; }
 
     /* summary cards */
     .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; margin-bottom: 0.6rem; flex-shrink: 0; }
@@ -237,6 +239,8 @@
     <div class="controls">
       <label>From <input type="date" id="me-start" onchange="renderRaw('me')" /></label>
       <label>To &nbsp;&nbsp;<input type="date" id="me-end" onchange="renderRaw('me')" /></label>
+      <button class="save-btn" id="me-update-btn" onclick="updateFitbitMe()">Update Fitbit</button>
+      <span id="me-update-status" style="font-size:0.8rem;color:#64748b"></span>
     </div>
     <div class="summary" id="me-cards"></div>
     <div class="table-wrap" style="flex:1;min-height:0;">
@@ -270,7 +274,8 @@
           <th>Bone</th>
           <th>Gym</th>
           <th>Weight</th>
-          <th>Wt (Fitbit)</th>
+          <th>Weights</th>
+          <th>BMI</th>
           <th>Steps</th>
         </tr></thead>
         <tbody id="weight-tbody"></tbody>
@@ -293,6 +298,7 @@
       {key:"restingHeartRate",label:"Heart Rate"},{key:"sedentaryMinutes",label:"Sedentary"},
       {key:"lightlyActiveMinutes",label:"Light"},{key:"fairlyActiveMinutes",label:"Moderate"},
       {key:"veryActiveMinutes",label:"Vigorous"},{key:"floors",label:"Floors"},
+      {key:"weight",label:"Weight"},
     ];
 
     // ── gym tab ───────────────────────────────────────────────────────────────
@@ -361,15 +367,16 @@
       const weekStart  = weekStartEST();
       const monthStart = monthStartEST();
 
-      // Steps lookup from fitbit data
+      // Steps and weight lookup from me.json
       const meByDate = {};
-      for (const r of allData.me || []) meByDate[r.date] = r.steps;
+      const meWeightByDate = {};
+      for (const r of allData.me || []) { meByDate[r.date] = r.steps; meWeightByDate[r.date] = r.weight; }
 
       // All entries from weightData, oldest first for tree building
       const allEntries = Object.entries(weightData)
         .filter(([d]) => d <= today)
         .sort(([a],[b]) => a < b ? -1 : 1)
-        .map(([date, e]) => ({ date, ...e, steps: meByDate[date] ?? null }));
+        .map(([date, e]) => ({ date, ...e, steps: meByDate[date] ?? null, weight: meWeightByDate[date] ?? null }));
 
       const totalGym   = allEntries.filter(e => e.gym).length;
       const weekGym    = allEntries.filter(e => e.gym && e.date >= weekStart && e.date <= today).length;
@@ -597,7 +604,7 @@
         fetch(rawBase ? rawBase + "/weight_data.json" + cacheBust : "/weight_data.json").catch(() => null),
       ]);
       allData = {
-        me:  (meRes  && meRes.ok)  ? await meRes.json()  : [],
+        me:  (meRes  && meRes.ok)  ? (await meRes.json()).data  : [],
         mom: (momRes && momRes.ok) ? await momRes.json() : [],
       };
 const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
@@ -621,7 +628,7 @@ const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
           document.getElementById(`${user}-start`).value = dates[0];
           document.getElementById(`${user}-end`).value   = dates[dates.length-1];
         }
-        document.getElementById(`raw-head-${user}`).innerHTML = RAW_COLS.map(c=>`<th>${c.label}</th>`).join("");
+        document.getElementById(`raw-head-${user}`).innerHTML = RAW_COLS.map(c=>`<th>${c.label}</th>`).join("") + (user==="me" ? `<th></th>` : "");
       }
       renderDashboard();
 
@@ -917,10 +924,112 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         <div class="card"><div class="card-label">Avg Active Min</div><div class="card-value">${fmt(avg("fairlyActiveMinutes")+avg("veryActiveMinutes"))}</div></div>
       `;
       const tbody = document.getElementById(`${user}-tbody`);
-      if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length}" class="status">No data.</td></tr>`; return; }
+      if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + (user==="me"?1:0)}" class="status">No data.</td></tr>`; return; }
       tbody.innerHTML = [...rows].reverse().map(r =>
-        `<tr>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}</tr>`
+        `<tr>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}${user==="me" ? `<td><button class="del-btn" onclick="deleteRow('${r.date}')">✕</button></td>` : ""}</tr>`
       ).join("");
+    }
+
+    // ── delete me row ─────────────────────────────────────────────────────────
+    async function deleteRow(date) {
+      if (!confirm(`Delete row for ${date}?`)) return;
+      allData.me = allData.me.filter(r => r.date !== date);
+      renderRaw("me");
+      await fetch("/delete-me-row", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date }),
+      }).catch(() => null);
+    }
+
+    // ── Fitbit update ─────────────────────────────────────────────────────────
+    async function updateFitbitMe() {
+      const btn      = document.getElementById("me-update-btn");
+      const statusEl = document.getElementById("me-update-status");
+      const setStatus = (msg, color) => { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
+
+      btn.disabled = true;
+
+      if (location.hostname === "localhost") {
+        // ── local: call serve.py which runs fetch_fitbit.py directly ──────────
+        setStatus("Updating…");
+        const res = await fetch("/update-fitbit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }).catch(e => null);
+        if (!res || !res.ok) {
+          const err = res ? (await res.json().catch(() => ({}))).error : "Network error";
+          setStatus("Failed: " + (err || res?.status), "#f87171");
+          btn.disabled = false;
+          return;
+        }
+        // Reload me.json from local server
+        const meRes = await fetch("/me.json?t=" + Date.now()).catch(() => null);
+        if (meRes?.ok) {
+          allData.me = (await meRes.json()).data;
+          document.getElementById("me-tbody").innerHTML = "";
+          renderRaw("me");
+          setStatus("Done!", "#4ade80");
+        } else {
+          setStatus("Done — reload to see updates.", "#4ade80");
+        }
+        btn.disabled = false;
+        return;
+      }
+
+      // ── production: trigger GitHub Actions workflow ────────────────────────
+      let pat = localStorage.getItem("gh_pat");
+      if (!pat) {
+        const r = await fetch("/gh_pat").catch(() => null);
+        if (r?.ok) pat = (await r.json()).pat;
+      }
+      if (!pat) {
+        pat = prompt("Enter a GitHub Personal Access Token with 'workflow' scope.\nIt will be saved locally for future use.");
+        if (!pat) { btn.disabled = false; return; }
+        localStorage.setItem("gh_pat", pat.trim());
+      }
+      const ghHeaders = { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
+
+      setStatus("Starting update…");
+      const triggerTime = new Date().toISOString();
+      const triggerRes = await fetch(
+        "https://api.github.com/repos/michael-tint/websteps/actions/workflows/fetch_fitbit.yml/dispatches",
+        { method: "POST", headers: ghHeaders, body: JSON.stringify({ ref: "main", inputs: { end_date: "" } }) }
+      );
+      if (triggerRes.status === 401) { localStorage.removeItem("gh_pat"); setStatus("Invalid token — cleared. Try again.", "#f87171"); btn.disabled = false; return; }
+      if (triggerRes.status !== 204) { setStatus(`Trigger failed (${triggerRes.status})`, "#f87171"); btn.disabled = false; return; }
+
+      setStatus("Waiting for workflow…");
+      let runId = null;
+      for (let i = 0; i < 15 && !runId; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const run = ((await (await fetch("https://api.github.com/repos/michael-tint/websteps/actions/workflows/fetch_fitbit.yml/runs?per_page=1", { headers: ghHeaders })).json()).workflow_runs||[])[0];
+        if (run && run.created_at >= triggerTime) runId = run.id;
+      }
+      if (!runId) { setStatus("Couldn't find workflow run.", "#f8c94b"); btn.disabled = false; return; }
+
+      const startedAt = Date.now();
+      let completed = false, conclusion = null;
+      for (let i = 0; i < 40 && !completed; i++) {
+        await new Promise(r => setTimeout(r, 5000));
+        const run = await (await fetch(`https://api.github.com/repos/michael-tint/websteps/actions/runs/${runId}`, { headers: ghHeaders })).json();
+        if (run.status === "completed") { completed = true; conclusion = run.conclusion; }
+        else setStatus(`Updating… ${Math.round((Date.now() - startedAt) / 1000)}s`);
+      }
+      if (!completed) { setStatus("Timed out — check Actions tab.", "#f8c94b"); btn.disabled = false; return; }
+      if (conclusion !== "success") { setStatus(`Failed (${conclusion}) — check Actions tab.`, "#f87171"); btn.disabled = false; return; }
+
+      const meRes = await fetch("https://raw.githubusercontent.com/michael-tint/websteps/main/me.json?t=" + Date.now()).catch(() => null);
+      if (meRes?.ok) {
+        allData.me = (await meRes.json()).data;
+        document.getElementById("me-tbody").innerHTML = "";
+        renderRaw("me");
+        setStatus("Done!", "#4ade80");
+      } else {
+        setStatus("Done — reload to see updates.", "#4ade80");
+      }
+      btn.disabled = false;
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
@@ -964,7 +1073,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
     function renderWeight() {
       const meByDate = {};
-      for (const r of allData.me || []) meByDate[r.date] = r.steps;
+      const meWeightByDate = {};
+      for (const r of allData.me || []) { meByDate[r.date] = r.steps; meWeightByDate[r.date] = r.weight; }
 
       const mergedData = weightData;
 
@@ -1009,7 +1119,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
           <td>${inp(date,"bone","w-comp",mergedData)}</td>
           <td>${inp(date,"gym","gym-input",mergedData)}</td>
           <td>${inp(date,"weight","w-weight",mergedData)}</td>
-          <td style="color:#4ade80;text-align:right">${mergedData[date]?.weight_fitbit != null ? fmt(mergedData[date].weight_fitbit,1) : ""}</td>
+          <td style="color:#4ade80;text-align:right">${meWeightByDate[date] != null ? fmt(meWeightByDate[date],1) : ""}</td>
+          <td style="color:#94a3b8;text-align:right">${meWeightByDate[date] != null ? fmt(calcBMI(meWeightByDate[date]),1) : ""}</td>
           <td style="color:#94a3b8;text-align:right">${steps}</td>
         </tr>`;
       }).join("");
