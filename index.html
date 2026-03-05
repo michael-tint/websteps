@@ -597,12 +597,11 @@
 
     // ── init ──────────────────────────────────────────────────────────────────
     async function init() {
-      const rawBase = location.hostname === "localhost" ? "" : "https://raw.githubusercontent.com/michael-tint/websteps/main";
       const cacheBust = "?t=" + Date.now();
       const [meRes, momRes, weightRes] = await Promise.all([
-        fetch(rawBase ? rawBase + "/me.json"  + cacheBust : "/me.json").catch(() => null),
-        fetch(rawBase ? rawBase + "/mom.json" + cacheBust : "/mom.json").catch(() => null),
-        fetch(rawBase ? rawBase + "/weight_data.json" + cacheBust : "/weight_data.json").catch(() => null),
+        fetch("me.json"          + cacheBust).catch(() => null),
+        fetch("mom.json"         + cacheBust).catch(() => null),
+        fetch("weight_data.json" + cacheBust).catch(() => null),
       ]);
       allData = {
         me:  (meRes  && meRes.ok)  ? (await meRes.json()).data  : [],
