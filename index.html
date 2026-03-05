@@ -597,8 +597,8 @@
       const rawBase = location.hostname === "localhost" ? "" : "https://raw.githubusercontent.com/michael-tint/websteps/main";
       const cacheBust = "?t=" + Date.now();
       const [meRes, momRes, weightRes, activityRes] = await Promise.all([
-        fetch(rawBase ? rawBase + "/me.json"  + cacheBust : "/me.json").catch(() => null),
-        fetch(rawBase ? rawBase + "/mom.json" + cacheBust : "/mom.json").catch(() => null),
+        fetch(rawBase ? rawBase + "/me.json"  + cacheBust : "me.json").catch(() => null),
+        fetch(rawBase ? rawBase + "/mom.json" + cacheBust : "mom.json").catch(() => null),
         fetch(rawBase ? rawBase + "/weight_data.json" + cacheBust : "/weight_data.json").catch(() => null),
         fetch(rawBase ? rawBase + "/fitbit_activity.json" + cacheBust : "/fitbit_activity.json").catch(() => null),
       ]);
