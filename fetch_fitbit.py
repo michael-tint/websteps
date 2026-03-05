@@ -53,10 +53,12 @@ while chunk_end > start:
     print(f"Fetching: {url}")
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
     try:
-        data = json.loads(urllib.request.urlopen(req).read())
-        logs.extend(data.get("weight", []))
+        resp = urllib.request.urlopen(req)
+        chunk_logs = json.loads(resp.read()).get("weight", [])
+        print(f"  → {len(chunk_logs)} entries | rate limit remaining: {resp.headers.get('Fitbit-Rate-Limit-Remaining','?')} / {resp.headers.get('Fitbit-Rate-Limit-Limit','?')} (resets in {resp.headers.get('Fitbit-Rate-Limit-Reset','?')}s)")
+        logs.extend(chunk_logs)
     except urllib.error.HTTPError as e:
-        print(f"Weight fetch failed — HTTP {e.code}: {e.read().decode()}")
+        print(f"  → HTTP {e.code}: {e.read().decode()} | rate limit remaining: {e.headers.get('Fitbit-Rate-Limit-Remaining','?')}")
         raise
     chunk_end = chunk_start - timedelta(days=1)
 
