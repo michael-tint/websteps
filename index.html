@@ -355,6 +355,19 @@
       };
     }
 
+    function gymYearCols(entries) {
+      const f  = (v,d=1) => v != null ? fmt(v,d) : "";
+      const fp = v => v != null ? fmt(v,1)+"%" : "";
+      const first = [...entries].sort((a,b) => a.date < b.date ? -1 : 1)[0];
+      if (!first) return `<td colspan="2"></td>`.repeat(6);
+      return `<td colspan="2">${f(first.weight)}</td>
+        <td colspan="2">${f(calcBMI(first.weight))}</td>
+        <td colspan="2">${f(first.bone)}</td>
+        <td colspan="2">${f(first.muscle)}</td>
+        <td colspan="2">${f(first.fat)}</td>
+        <td colspan="2">${fp(calcFatPct(first.fat, first.muscle))}</td>`;
+    }
+
     function gymCols(agg, ex={}) {
       const f  = (v,d=1) => v != null ? fmt(v,d) : "";
       const fp = v => v != null ? fmt(v,1)+"%" : "";
@@ -465,8 +478,9 @@
 
       for (const year of years) {
         const yOpen = gymExpandedYears.has(year);
+        const yEntries = Object.values(tree[year]).flatMap(m => Object.values(m)).flat();
         html += `<tr class="row-year${yOpen?" open":""}" onclick="toggleGymYear('${year}')">
-          <td><span class="arrow">${yOpen?"▼":"▶"}</span>${year}</td>${emptyCols}</tr>`;
+          <td><span class="arrow">${yOpen?"▼":"▶"}</span>${year}</td>${gymYearCols(yEntries)}</tr>`;
         if (!yOpen) {
           const yWeeks = Object.values(tree[year]).flatMap(m => Object.keys(m));
           const yComp = Object.values(tree[year]).flatMap(m => Object.values(m)).flat().reverse().find(e => e.fat != null);
