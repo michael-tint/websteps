@@ -2,7 +2,7 @@
   "creds": {
     "client_id": "23TX78",
     "client_secret": "f6e2fe530460dbd77234afa6372f0183",
-    "refresh_token": "04ccc0b2d4dcf8f9f4b2c46cd97d3769608d92dcd08492356bd1707c05273620"
+    "refresh_token": "aaaeaa321fdf814789c63ed563df6974c1d246957c2454cf64b71c777cc7eaf5"
   },
   "data": [
     {
@@ -8383,21 +8383,6 @@
       "marginalCalories": 1122,
       "restingHeartRate": 79,
       "weight": 164.4
-    },
-    {
-      "date": "2026-03-04",
-      "steps": 7445,
-      "caloriesOut": 2691,
-      "caloriesBMR": 1639,
-      "activityCalories": 1075,
-      "floors": 26,
-      "elevation": 260,
-      "sedentaryMinutes": 1218,
-      "lightlyActiveMinutes": 161,
-      "fairlyActiveMinutes": 12,
-      "veryActiveMinutes": 49,
-      "restingHeartRate": 80,
-      "weight": 164.7
     }
   ]
 }
