@@ -487,7 +487,7 @@
         if (!yOpen) {
           const yWeeks = Object.values(tree[year]).flatMap(m => Object.keys(m));
           const yComp = Object.values(tree[year]).flatMap(m => Object.values(m)).flat().reverse().find(e => e.fat != null);
-          chartItems.push({ label: [year], weeks: yWeeks, bone: yComp?.bone??null, muscle: yComp?.muscle??null, fat: yComp?.fat??null });
+          chartItems.push({ cy: year, cm: null, cw: null, weeks: yWeeks, bone: yComp?.bone??null, muscle: yComp?.muscle??null, fat: yComp?.fat??null });
           continue;
         }
 
@@ -503,7 +503,7 @@
             <td><span class="arrow">${mOpen?"▼":"▶"}</span>${mLabel}</td>${gymCols(mAgg, mEx)}</tr>`;
           if (!mOpen) {
             const mComp = mEntries.slice().reverse().find(e => e.fat != null);
-            chartItems.push({ label: [year, mLabel], weeks: Object.keys(tree[year][month]), bone: mComp?.bone??null, muscle: mComp?.muscle??null, fat: mComp?.fat??null });
+            chartItems.push({ cy: year, cm: mLabel, cw: null, weeks: Object.keys(tree[year][month]), bone: mComp?.bone??null, muscle: mComp?.muscle??null, fat: mComp?.fat??null });
             continue;
           }
 
@@ -524,7 +524,7 @@
               <td><span class="arrow">${wOpen?"▼":"▶"}</span>${wLabel}</td>${gymCols(wAgg, wEx)}</tr>`;
             if (!wOpen) {
               const wComp = wEntries.slice().reverse().find(e => e.fat != null);
-              chartItems.push({ label: [year, mLabel, wLabel], weeks: [week], bone: wComp?.bone??null, muscle: wComp?.muscle??null, fat: wComp?.fat??null });
+              chartItems.push({ cy: year, cm: mLabel, cw: wLabel, weeks: [week], bone: wComp?.bone??null, muscle: wComp?.muscle??null, fat: wComp?.fat??null });
             }
             if (!wOpen) continue;
 
@@ -541,6 +541,16 @@
       document.getElementById("gym-tbody").innerHTML = html;
 
       // Combined chart — stacked bars (bone/muscle/fat) + lines (avg/max weight)
+      // Build 4-line hierarchical x-axis labels; suppress repeated year/month
+      chartItems.forEach((item, i) => {
+        const prev = i > 0 ? chartItems[i-1] : null;
+        item.label = [
+          item.cy && item.cy !== prev?.cy ? item.cy : "",
+          item.cm && item.cm !== prev?.cm ? item.cm : "",
+          item.cw || "",
+          "",
+        ];
+      });
       const chartLabels = chartItems.map(i => i.label);
       const avgWts = chartItems.map(i => weekAvgWt(i.weeks));
       const maxWts = chartItems.map(i => weekAvgMax(i.weeks));
