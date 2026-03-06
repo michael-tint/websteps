@@ -258,6 +258,8 @@
   <!-- MOM -->
   <div id="panel-mom" class="panel">
     <div class="controls">
+      <button class="save-btn" id="mom-update-btn" onclick="updateFitbitMom()">Update Fitbit</button>
+      <span id="mom-update-status" style="font-size:0.8rem;color:#64748b"></span>
       <label>From <input type="date" id="mom-start" onchange="renderRaw('mom')" /></label>
       <label>To &nbsp;&nbsp;<input type="date" id="mom-end" onchange="renderRaw('mom')" /></label>
     </div>
@@ -295,7 +297,8 @@
   <script>
     let allData = {};
     let weightData = {};
-    let meCreds = null;
+    let meCreds  = null;
+    let momCreds = null;
     const STEPS_FROM = "2025-01-01";
     let stepsChart = null;
     let globalMaxSteps = 0;
@@ -688,11 +691,13 @@
         fetch("mom.json"         + cacheBust).catch(() => null),
         fetch("weight_data.json" + cacheBust).catch(() => null),
       ]);
-      const meParsed = (meRes && meRes.ok) ? await meRes.json() : {};
-      meCreds = meParsed.creds || null;
+      const meParsed  = (meRes  && meRes.ok)  ? await meRes.json()  : {};
+      const momParsed = (momRes && momRes.ok) ? await momRes.json() : {};
+      meCreds  = meParsed.creds  || null;
+      momCreds = momParsed.creds || null;
       allData = {
-        me:  meParsed.data || [],
-        mom: (momRes && momRes.ok) ? await momRes.json() : [],
+        me:  meParsed.data  || [],
+        mom: momParsed.data || (Array.isArray(momParsed) ? momParsed : []),
       };
 const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
       const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
@@ -1026,23 +1031,23 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       return pat || null;
     }
 
-    async function saveToGitHub(setStatus) {
+    async function saveToGitHub(filename, creds, data, setStatus) {
       const pat = getGhPat();
       if (!pat) return false;
       const gh = { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
+      const url = `https://api.github.com/repos/michael-tint/websteps/contents/${filename}`;
       if (setStatus) setStatus("Getting file info…");
-      const infoRes = await fetch("https://api.github.com/repos/michael-tint/websteps/contents/me.json", { headers: gh }).catch(() => null);
+      const infoRes = await fetch(url, { headers: gh }).catch(() => null);
       if (!infoRes?.ok) {
         if (infoRes?.status === 401) localStorage.removeItem("gh_pat");
         if (setStatus) setStatus(`Save failed (${infoRes?.status})`, "#f87171");
         return false;
       }
       const { sha } = await infoRes.json();
-      const content = btoa(unescape(encodeURIComponent(JSON.stringify({ creds: meCreds, data: allData.me }, null, 2))));
+      const content = btoa(unescape(encodeURIComponent(JSON.stringify({ creds, data }, null, 2))));
       if (setStatus) setStatus("Saving…");
-      const putRes = await fetch(
-        "https://api.github.com/repos/michael-tint/websteps/contents/me.json",
-        { method: "PUT", headers: gh, body: JSON.stringify({ message: "Update me.json [skip ci]", content, sha }) }
+      const putRes = await fetch(url,
+        { method: "PUT", headers: gh, body: JSON.stringify({ message: `Update ${filename} [skip ci]`, content, sha }) }
       ).catch(() => null);
       if (!putRes?.ok) { if (setStatus) setStatus(`Save failed (${putRes?.status})`, "#f87171"); return false; }
       return true;
@@ -1055,63 +1060,58 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (location.hostname === "localhost") {
         await fetch("/delete-me-row", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) }).catch(() => null);
       } else {
-        const ok = await saveToGitHub();
+        const ok = await saveToGitHub("me.json", meCreds, allData.me);
         if (!ok) alert("Failed to save to GitHub.");
       }
     }
 
     // ── Fitbit update ─────────────────────────────────────────────────────────
-    async function updateFitbitMe(btn, statusEl) {
-      btn      = btn      || document.getElementById("me-update-btn");
-      statusEl = statusEl || document.getElementById("me-update-status");
+    async function updateFitbit(btn, statusEl, filename, creds, dataKey, defaultBtnId, defaultStatusId) {
+      btn      = btn      || document.getElementById(defaultBtnId);
+      statusEl = statusEl || document.getElementById(defaultStatusId);
       const setStatus = (msg, color) => { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
-
       btn.disabled = true;
 
       if (location.hostname === "localhost") {
-        // ── local: call serve.py which runs fetch_fitbit.py directly ──────────
         setStatus("Updating…");
         const res = await fetch("/update-fitbit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        }).catch(e => null);
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+        }).catch(() => null);
         if (!res || !res.ok) {
           const err = res ? (await res.json().catch(() => ({}))).error : "Network error";
           setStatus("Failed: " + (err || res?.status), "#f87171");
-          btn.disabled = false;
-          return;
+          btn.disabled = false; return;
         }
-        // Reload me.json from local server
-        const meRes = await fetch("/me.json?t=" + Date.now()).catch(() => null);
-        if (meRes?.ok) {
-          allData.me = (await meRes.json()).data;
-          document.getElementById("me-tbody").innerHTML = "";
-          renderRaw("me");
+        const fileRes = await fetch(`/${filename}?t=` + Date.now()).catch(() => null);
+        if (fileRes?.ok) {
+          const parsed = await fileRes.json();
+          allData[dataKey] = parsed.data || (Array.isArray(parsed) ? parsed : []);
+          document.getElementById(`${dataKey}-tbody`).innerHTML = "";
+          renderRaw(dataKey);
           setStatus("Done!", "#4ade80");
         } else {
           setStatus("Done — reload to see updates.", "#4ade80");
         }
-        btn.disabled = false;
-        return;
+        btn.disabled = false; return;
       }
 
       // ── production: direct Fitbit API + save to GitHub ───────────────────
+      if (!creds) { setStatus("No credentials found in " + filename, "#f87171"); btn.disabled = false; return; }
       const pat = getGhPat();
       if (!pat) { btn.disabled = false; return; }
-      const fitbitAuth = btoa(`${meCreds.client_id}:${meCreds.client_secret}`);
+      const fitbitAuth = btoa(`${creds.client_id}:${creds.client_secret}`);
 
       // 1. Refresh Fitbit token
       setStatus("Refreshing Fitbit token…");
       const tokenRes = await fetch("https://api.fitbit.com/oauth2/token", {
         method: "POST",
         headers: { "Authorization": `Basic ${fitbitAuth}`, "Content-Type": "application/x-www-form-urlencoded" },
-        body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(meCreds.refresh_token)}`,
+        body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(creds.refresh_token)}`,
       }).catch(() => null);
       if (!tokenRes?.ok) { setStatus(`Fitbit token refresh failed (${tokenRes?.status})`, "#f87171"); btn.disabled = false; return; }
       const tokens = await tokenRes.json();
       const accessToken = tokens.access_token;
-      meCreds.refresh_token = tokens.refresh_token;
+      creds.refresh_token = tokens.refresh_token;
 
       // 2. Fetch today's weight
       setStatus("Fetching weight…");
@@ -1123,26 +1123,32 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const weightLogs = weightRes?.ok ? (await weightRes.json()).weight || [] : [];
       if (weightLogs.length) {
         const w = Math.round(Math.min(...weightLogs.map(e => parseFloat(e.weight))) * 10) / 10;
-        const existing = allData.me.find(r => r.date === today);
+        const existing = allData[dataKey].find(r => r.date === today);
         if (existing) { existing.weight = w; }
-        else { allData.me.push({ date: today, weight: w }); allData.me.sort((a, b) => a.date < b.date ? -1 : 1); }
+        else { allData[dataKey].push({ date: today, weight: w }); allData[dataKey].sort((a, b) => a.date < b.date ? -1 : 1); }
       }
 
       // 3. Save to GitHub
-      const ok = await saveToGitHub(setStatus);
+      const ok = await saveToGitHub(filename, creds, allData[dataKey], setStatus);
       if (!ok) { btn.disabled = false; return; }
 
       // 4. Refresh display
-      allData.me = allData.me;
       globalMaxSteps = 0;
       for (const r of allData.me) if (r.steps > globalMaxSteps) globalMaxSteps = r.steps;
-      document.getElementById("me-tbody").innerHTML = "";
-      renderRaw("me");
+      document.getElementById(`${dataKey}-tbody`).innerHTML = "";
+      renderRaw(dataKey);
       renderGym();
       renderWeight();
       renderDashboard();
       setStatus("Done!", "#4ade80");
       btn.disabled = false;
+    }
+
+    function updateFitbitMe(btn, statusEl) {
+      return updateFitbit(btn, statusEl, "me.json", meCreds, "me", "me-update-btn", "me-update-status");
+    }
+    function updateFitbitMom(btn, statusEl) {
+      return updateFitbit(btn, statusEl, "mom.json", momCreds, "mom", "mom-update-btn", "mom-update-status");
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
