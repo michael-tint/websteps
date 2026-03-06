@@ -155,6 +155,7 @@
     tr.row-year, tr.row-month, tr.row-week { cursor: pointer; user-select: none; }
     tr.row-year.open  > td:first-child { color: #93c5fd; }
     tr.row-month.open > td:first-child { color: #60a5fa; }
+    tr.row-month.open > td { font-weight: 700; }
     tr.row-week.open  > td:first-child { color: #a5b4fc; }
 
     tr.grand-total > td { border-top: 2px solid #334155; font-weight: 700; color: #f8fafc; padding: 0.35rem 0.4rem; background: #0c1526; }
@@ -341,7 +342,8 @@
       const weights = entries.map(e => e.weight).filter(v => v != null);
       const avgWt   = weights.length ? weights.reduce((s,v)=>s+v,0)/weights.length : null;
       const maxWt   = weights.length ? Math.max(...weights) : null;
-      const steps    = entries.reduce((s,e) => s + (e.steps||0), 0) || null;
+      const stepVals = entries.map(e => e.steps).filter(v => v != null && v > 0);
+      const steps    = stepVals.length ? stepVals.reduce((s,v) => s+v, 0) / stepVals.length : null;
       const gymCount = entries.filter(e => e.gym).length;
       const comp = entries.find(e => e.fat != null || e.muscle != null || e.bone != null);
       return {
@@ -383,7 +385,7 @@
         <td>${f(agg.bone)}</td><td>${f(agg.muscle)}</td>
         <td>${f(agg.fat)}</td><td>${fp(agg.fatPct)}</td>
         <td>${agg.steps != null ? fmt(agg.steps,0) : ""}</td>
-        <td>${f(ex.sessPerWk,1)}</td>
+        <td>${ex.gymLabel !== undefined ? ex.gymLabel : f(ex.sessPerWk,1)}</td>
         <td${dc(ex.avgWtDelta)}>${fd(ex.avgWtDelta)}</td>
         <td${dc(ex.maxWtDelta)}>${fd(ex.maxWtDelta)}</td>`;
     }
@@ -562,7 +564,7 @@
               const dLabel = new Date(dy,dm-1,dd).toLocaleString("default",{month:"short",day:"numeric"});
               const dDelta = dayWtDelta[e.date] ?? null;
               html += `<tr class="row-day">
-                <td><span class="arrow"></span>${dLabel}</td>${gymCols(gymAggregate([e]), { avgWtDelta: dDelta, maxWtDelta: dDelta })}</tr>`;
+                <td><span class="arrow"></span>${dLabel}</td>${gymCols(gymAggregate([e]), { gymLabel: e.gym || "", avgWtDelta: dDelta, maxWtDelta: dDelta })}</tr>`;
               chartItems.push({
                 cy: year, cm: mLabel, cw: wLabel, cd: dLabel,
                 avgWt: e.weight ?? null, maxWt: e.weight ?? null, sess: null,
