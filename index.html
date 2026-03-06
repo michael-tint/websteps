@@ -182,7 +182,7 @@
   <!-- DASHBOARD -->
   <div id="panel-dashboard" class="panel">
     <div class="controls">
-      <button class="save-btn" onclick="updateFitbitMe(this, document.getElementById('steps-update-status'))">Update</button>
+      <button class="save-btn" onclick="updateFitbitBoth(this, document.getElementById('steps-update-status'))">Update</button>
       <span id="steps-update-status" style="font-size:0.8rem;color:#64748b"></span>
     </div>
     <div class="summary" id="dash-cards"></div>
@@ -203,7 +203,7 @@
   <!-- GYM -->
   <div id="panel-gym" class="panel active">
     <div class="controls">
-      <button class="save-btn" onclick="updateFitbitMe(this, document.getElementById('gym-update-status'))">Update</button>
+      <button class="save-btn" onclick="updateFitbitBoth(this, document.getElementById('gym-update-status'))">Update</button>
       <button class="save-btn" onclick="saveGymView()">Save View</button>
       <span id="gym-update-status" style="font-size:0.8rem;color:#64748b"></span>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
@@ -244,10 +244,10 @@
   <!-- ME -->
   <div id="panel-me" class="panel">
     <div class="controls">
-      <label>From <input type="date" id="me-start" onchange="renderRaw('me')" /></label>
-      <label>To &nbsp;&nbsp;<input type="date" id="me-end" onchange="renderRaw('me')" /></label>
       <button class="save-btn" id="me-update-btn" onclick="updateFitbitMe()">Update Fitbit</button>
       <span id="me-update-status" style="font-size:0.8rem;color:#64748b"></span>
+      <label>From <input type="date" id="me-start" onchange="renderRaw('me')" /></label>
+      <label>To &nbsp;&nbsp;<input type="date" id="me-end" onchange="renderRaw('me')" /></label>
     </div>
     <div class="summary" id="me-cards"></div>
     <div class="table-wrap" style="flex:1;min-height:0;">
@@ -272,7 +272,7 @@
   <!-- WEIGHT -->
   <div id="panel-weight" class="panel">
     <div class="controls">
-      <button class="save-btn" onclick="updateFitbitMe(this, document.getElementById('weight-update-status'))">Update</button>
+      <button class="save-btn" onclick="updateFitbitBoth(this, document.getElementById('weight-update-status'))">Update</button>
       <span id="weight-update-status" style="font-size:0.8rem;color:#64748b"></span>
     </div>
     <div class="summary" id="weight-cards"></div>
@@ -1067,10 +1067,10 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
     // ── Fitbit update ─────────────────────────────────────────────────────────
     async function updateFitbit(btn, statusEl, filename, creds, dataKey, defaultBtnId, defaultStatusId) {
-      btn      = btn      || document.getElementById(defaultBtnId);
-      statusEl = statusEl || document.getElementById(defaultStatusId);
-      const setStatus = (msg, color) => { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
-      btn.disabled = true;
+      btn      = btn      || (defaultBtnId  ? document.getElementById(defaultBtnId)  : null);
+      statusEl = statusEl || (defaultStatusId ? document.getElementById(defaultStatusId) : null);
+      const setStatus = (msg, color) => { if (!statusEl) return; statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
+      if (btn) btn.disabled = true;
 
       if (location.hostname === "localhost") {
         setStatus("Updating…");
@@ -1080,7 +1080,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         if (!res || !res.ok) {
           const err = res ? (await res.json().catch(() => ({}))).error : "Network error";
           setStatus("Failed: " + (err || res?.status), "#f87171");
-          btn.disabled = false; return;
+          if (btn) btn.disabled = false; return;
         }
         const fileRes = await fetch(`/${filename}?t=` + Date.now()).catch(() => null);
         if (fileRes?.ok) {
@@ -1092,13 +1092,13 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         } else {
           setStatus("Done — reload to see updates.", "#4ade80");
         }
-        btn.disabled = false; return;
+        if (btn) btn.disabled = false; return;
       }
 
       // ── production: direct Fitbit API + save to GitHub ───────────────────
-      if (!creds) { setStatus("No credentials found in " + filename, "#f87171"); btn.disabled = false; return; }
+      if (!creds) { setStatus("No credentials found in " + filename, "#f87171"); if (btn) btn.disabled = false; return; }
       const pat = getGhPat();
-      if (!pat) { btn.disabled = false; return; }
+      if (!pat) { if (btn) btn.disabled = false; return; }
       const fitbitAuth = btoa(`${creds.client_id}:${creds.client_secret}`);
 
       // 1. Refresh Fitbit token
@@ -1108,7 +1108,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         headers: { "Authorization": `Basic ${fitbitAuth}`, "Content-Type": "application/x-www-form-urlencoded" },
         body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(creds.refresh_token)}`,
       }).catch(() => null);
-      if (!tokenRes?.ok) { setStatus(`Fitbit token refresh failed (${tokenRes?.status})`, "#f87171"); btn.disabled = false; return; }
+      if (!tokenRes?.ok) { setStatus(`Fitbit token refresh failed (${tokenRes?.status})`, "#f87171"); if (btn) btn.disabled = false; return; }
       const tokens = await tokenRes.json();
       const accessToken = tokens.access_token;
       creds.refresh_token = tokens.refresh_token;
@@ -1130,7 +1130,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
       // 3. Save to GitHub
       const ok = await saveToGitHub(filename, creds, allData[dataKey], setStatus);
-      if (!ok) { btn.disabled = false; return; }
+      if (!ok) { if (btn) btn.disabled = false; return; }
 
       // 4. Refresh display
       globalMaxSteps = 0;
@@ -1141,7 +1141,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       renderWeight();
       renderDashboard();
       setStatus("Done!", "#4ade80");
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
     }
 
     function updateFitbitMe(btn, statusEl) {
@@ -1149,6 +1149,19 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
     function updateFitbitMom(btn, statusEl) {
       return updateFitbit(btn, statusEl, "mom.json", momCreds, "mom", "mom-update-btn", "mom-update-status");
+    }
+    async function updateFitbitBoth(btn, statusEl) {
+      if (btn) btn.disabled = true;
+      const setStatus = (msg, color) => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; } };
+      setStatus("Updating…");
+      const noop = { disabled: false };
+      const noopEl = { textContent: "", style: {} };
+      await Promise.all([
+        updateFitbit(noop, noopEl, "me.json",  meCreds,  "me",  null, null),
+        updateFitbit(noop, noopEl, "mom.json", momCreds, "mom", null, null),
+      ]);
+      setStatus("Done!", "#4ade80");
+      if (btn) btn.disabled = false;
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
