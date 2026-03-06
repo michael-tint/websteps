@@ -137,8 +137,10 @@
 
     /* pivot row levels */
     #panel-gym table { font-size: 0.72rem; }
-    #panel-gym th { padding: 0.35rem 0.4rem; }
-    #panel-gym td { padding: 0.22rem 0.4rem; }
+    #panel-gym th { padding: 0.35rem 0.4rem; text-align: center; }
+    #panel-gym td { padding: 0.22rem 0.4rem; text-align: center; }
+    #panel-gym th:first-child, #panel-gym td:first-child { text-align: left; }
+    #panel-gym th:nth-child(11), #panel-gym td:nth-child(11) { width: 15ch; min-width: 15ch; max-width: 15ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     tr.row-year  > td             { background: #0c1526; border-top-color: #1e293b; }
     tr.row-year  > td:first-child { font-weight: 700; color: #f8fafc; padding-left: 0.4rem; }
     tr.row-month > td             { background: #1e293b; }
