@@ -355,9 +355,11 @@
       };
     }
 
-    function gymYearCols(entries) {
+    function gymYearCols(entries, avgWtDelta=null, maxWtDelta=null) {
       const f  = (v,d=1) => v != null ? fmt(v,d) : "";
       const fp = v => v != null ? fmt(v,1)+"%" : "";
+      const fd = v => v == null ? "" : (v > 0 ? "+" : "") + Number(v).toLocaleString(undefined,{maximumFractionDigits:1,minimumFractionDigits:1});
+      const dc = v => v == null ? "" : v < 0 ? " class=\"green\"" : v > 0 ? " class=\"red\"" : "";
       const first = [...entries].sort((a,b) => a.date < b.date ? -1 : 1)[0];
       if (!first) return `<td></td>`.repeat(12);
       const gymCount = entries.filter(e => e.gym).length;
@@ -368,7 +370,7 @@
         <td>${f(first.bone)}</td><td>${f(first.muscle)}</td>
         <td>${f(first.fat)}</td><td>${fp(calcFatPct(first.fat, first.muscle))}</td>
         <td></td><td>${f(sessPerWk)}</td>
-        <td></td><td></td>`;
+        <td${dc(avgWtDelta)}>${fd(avgWtDelta)}</td><td${dc(maxWtDelta)}>${fd(maxWtDelta)}</td>`;
     }
 
     function gymCols(agg, ex={}) {
@@ -463,6 +465,23 @@
             allWeekAggs[w] = gymAggregate(tree[y][m][w]);
       const sortedWeeks = Object.keys(allWeekAggs).sort();
 
+      const allMonthAggs = {};
+      for (const y of Object.keys(tree))
+        for (const m of Object.keys(tree[y]))
+          allMonthAggs[m] = gymAggregate(Object.values(tree[y][m]).flat());
+      const sortedMonths = Object.keys(allMonthAggs).sort();
+
+      const allYearAggs = {};
+      for (const y of Object.keys(tree))
+        allYearAggs[y] = gymAggregate(Object.values(tree[y]).flatMap(m => Object.values(m)).flat());
+      const sortedYears = Object.keys(allYearAggs).sort();
+
+      const sortedWtEntries = allEntries.filter(e => e.weight != null);
+      const dayWtDelta = {};
+      sortedWtEntries.forEach((e, i) => {
+        dayWtDelta[e.date] = i > 0 ? e.weight - sortedWtEntries[i-1].weight : null;
+      });
+
       const grand = gymAggregate(allEntries);
       const years = Object.keys(tree).sort(); // ascending
       let html = "";
@@ -482,8 +501,12 @@
       for (const year of years) {
         const yOpen = gymExpandedYears.has(year);
         const yEntries = Object.values(tree[year]).flatMap(m => Object.values(m)).flat();
+        const yi = sortedYears.indexOf(year);
+        const prevYearAgg = yi > 0 ? allYearAggs[sortedYears[yi-1]] : null;
+        const yAvgDelta = (allYearAggs[year]?.avgWt != null && prevYearAgg?.avgWt != null) ? allYearAggs[year].avgWt - prevYearAgg.avgWt : null;
+        const yMaxDelta = (allYearAggs[year]?.maxWt != null && prevYearAgg?.maxWt != null) ? allYearAggs[year].maxWt - prevYearAgg.maxWt : null;
         html += `<tr class="row-year${yOpen?" open":""}" onclick="toggleGymYear('${year}')">
-          <td><span class="arrow">${yOpen?"▼":"▶"}</span>${year}</td>${gymYearCols(yEntries)}</tr>`;
+          <td><span class="arrow">${yOpen?"▼":"▶"}</span>${year}</td>${gymYearCols(yEntries, yAvgDelta, yMaxDelta)}</tr>`;
         if (!yOpen) {
           const yWeeks = Object.values(tree[year]).flatMap(m => Object.keys(m));
           const yComp = Object.values(tree[year]).flatMap(m => Object.values(m)).flat().reverse().find(e => e.fat != null);
@@ -498,7 +521,13 @@
           const [,mm] = month.split("-");
           const mLabel = new Date(2000,+mm-1).toLocaleString("default",{month:"short"});
           const mWeekCount = Object.keys(tree[year][month]).length;
-          const mEx = { sessPerWk: mWeekCount ? mAgg.gymCount / mWeekCount : null };
+          const mi = sortedMonths.indexOf(month);
+          const prevMonthAgg = mi > 0 ? allMonthAggs[sortedMonths[mi-1]] : null;
+          const mEx = {
+            sessPerWk: mWeekCount ? mAgg.gymCount / mWeekCount : null,
+            avgWtDelta: (mAgg.avgWt != null && prevMonthAgg?.avgWt != null) ? mAgg.avgWt - prevMonthAgg.avgWt : null,
+            maxWtDelta: (mAgg.maxWt != null && prevMonthAgg?.maxWt != null) ? mAgg.maxWt - prevMonthAgg.maxWt : null,
+          };
           html += `<tr class="row-month${mOpen?" open":""}" onclick="toggleGymMonth('${month}')">
             <td><span class="arrow">${mOpen?"▼":"▶"}</span>${mLabel}</td>${gymCols(mAgg, mEx)}</tr>`;
           if (!mOpen) {
@@ -531,8 +560,9 @@
             for (const e of wEntries) {
               const [dy,dm,dd] = e.date.split("-").map(Number);
               const dLabel = new Date(dy,dm-1,dd).toLocaleString("default",{month:"short",day:"numeric"});
+              const dDelta = dayWtDelta[e.date] ?? null;
               html += `<tr class="row-day">
-                <td><span class="arrow"></span>${dLabel}</td>${gymCols(gymAggregate([e]))}</tr>`;
+                <td><span class="arrow"></span>${dLabel}</td>${gymCols(gymAggregate([e]), { avgWtDelta: dDelta, maxWtDelta: dDelta })}</tr>`;
               chartItems.push({
                 cy: year, cm: mLabel, cw: wLabel, cd: dLabel,
                 avgWt: e.weight ?? null, maxWt: e.weight ?? null, sess: null,
