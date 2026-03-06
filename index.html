@@ -720,7 +720,7 @@ const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
           document.getElementById(`${user}-start`).value = dates[0];
           document.getElementById(`${user}-end`).value   = dates[dates.length-1];
         }
-        document.getElementById(`raw-head-${user}`).innerHTML = RAW_COLS.map(c=>`<th>${c.label}</th>`).join("") + (user==="me" ? `<th></th>` : "");
+        document.getElementById(`raw-head-${user}`).innerHTML = RAW_COLS.map(c=>`<th>${c.label}</th>`).join("") + `<th></th>`;
       }
       renderDashboard();
 
@@ -1015,9 +1015,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         <div class="card"><div class="card-label">Avg Active Min</div><div class="card-value">${fmt(avg("fairlyActiveMinutes")+avg("veryActiveMinutes"))}</div></div>
       `;
       const tbody = document.getElementById(`${user}-tbody`);
-      if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + (user==="me"?1:0)}" class="status">No data.</td></tr>`; return; }
+      if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + 1}" class="status">No data.</td></tr>`; return; }
       tbody.innerHTML = [...rows].reverse().map(r =>
-        `<tr>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}${user==="me" ? `<td><button class="del-btn" onclick="deleteRow('${r.date}')">✕</button></td>` : ""}</tr>`
+        `<tr>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}<td><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`
       ).join("");
     }
 
@@ -1054,13 +1054,15 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     // ── delete me row ─────────────────────────────────────────────────────────
-    async function deleteRow(date) {
-      allData.me = allData.me.filter(r => r.date !== date);
-      renderRaw("me");
+    async function deleteRow(date, key) {
+      const filename = key + ".json";
+      const creds    = key === "mom" ? momCreds : meCreds;
+      allData[key] = allData[key].filter(r => r.date !== date);
+      renderRaw(key);
       if (location.hostname === "localhost") {
         await fetch("/delete-me-row", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) }).catch(() => null);
       } else {
-        const ok = await saveToGitHub("me.json", meCreds, allData.me);
+        const ok = await saveToGitHub(filename, creds, allData[key]);
         if (!ok) alert("Failed to save to GitHub.");
       }
     }
