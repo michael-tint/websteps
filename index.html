@@ -565,7 +565,7 @@
         data: {
           labels: chartLabels,
           datasets: [
-            { type: "line", label: "Sessions", data: sessData, yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderColor: "transparent", borderWidth: 0, fill: true, stepped: true, pointRadius: 0, order: 4 },
+            { type: "bar",  label: "Sessions", data: sessData, yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", barPercentage: 1.0, categoryPercentage: 1.0, order: 10 },
             { type: "bar",  label: "Bone",   data: chartItems.map(i => i.bone),   backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp", order: 2 },
             { type: "bar",  label: "Muscle", data: chartItems.map(i => i.muscle), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp", order: 2 },
             { type: "bar",  label: "Fat",    data: chartItems.map(i => i.fat),    backgroundColor: "rgba(244,114,182,0.80)", stack: "comp", order: 2 },
