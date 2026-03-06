@@ -225,7 +225,7 @@
             <th>Fat</th>
             <th>Fat%</th>
             <th>Steps</th>
-            <th>Sess/Wk</th>
+            <th>Gym</th>
             <th>Avg Wt Δ</th>
             <th>Max Wt Δ</th>
           </tr></thead>
@@ -573,7 +573,7 @@
         data: {
           labels: chartLabels,
           datasets: [
-            { type: "bar",  label: "Sessions", data: sessData, yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderWidth: 0, barPercentage: 1.0, categoryPercentage: 1.0, order: 10 },
+            { type: "bar",  label: "Gym", data: sessData, yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderWidth: 0, barPercentage: 1.0, categoryPercentage: 1.0, order: 10 },
             { type: "bar",  label: "Bone",   data: chartItems.map(i => i.bone),   backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
             { type: "bar",  label: "Muscle", data: chartItems.map(i => i.muscle), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
             { type: "bar",  label: "Fat",    data: chartItems.map(i => i.fat),    backgroundColor: "rgba(244,114,182,0.80)", stack: "comp", barPercentage: 0.5, order: 2 },
