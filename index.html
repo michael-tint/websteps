@@ -1154,15 +1154,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
     async function updateFitbitBoth(btn, statusEl) {
       if (btn) btn.disabled = true;
-      const setStatus = (msg, color) => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; } };
-      setStatus("Updating…");
-      const noop = { disabled: false };
-      const noopEl = { textContent: "", style: {} };
-      await Promise.all([
-        updateFitbit(noop, noopEl, "me.json",  meCreds,  "me",  null, null),
-        updateFitbit(noop, noopEl, "mom.json", momCreds, "mom", null, null),
-      ]);
-      setStatus("Done!", "#4ade80");
+      const noBtn = { disabled: false };
+      await updateFitbit(noBtn, statusEl, "me.json",  meCreds,  "me",  null, null);
+      await updateFitbit(noBtn, statusEl, "mom.json", momCreds, "mom", null, null);
       if (btn) btn.disabled = false;
     }
 
