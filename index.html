@@ -487,7 +487,7 @@
         if (!yOpen) {
           const yWeeks = Object.values(tree[year]).flatMap(m => Object.keys(m));
           const yComp = Object.values(tree[year]).flatMap(m => Object.values(m)).flat().reverse().find(e => e.fat != null);
-          chartItems.push({ label: year, weeks: yWeeks, bone: yComp?.bone??null, muscle: yComp?.muscle??null, fat: yComp?.fat??null });
+          chartItems.push({ label: [year], weeks: yWeeks, bone: yComp?.bone??null, muscle: yComp?.muscle??null, fat: yComp?.fat??null });
           continue;
         }
 
@@ -503,7 +503,7 @@
             <td><span class="arrow">${mOpen?"▼":"▶"}</span>${mLabel}</td>${gymCols(mAgg, mEx)}</tr>`;
           if (!mOpen) {
             const mComp = mEntries.slice().reverse().find(e => e.fat != null);
-            chartItems.push({ label: mLabel, weeks: Object.keys(tree[year][month]), bone: mComp?.bone??null, muscle: mComp?.muscle??null, fat: mComp?.fat??null });
+            chartItems.push({ label: [year, mLabel], weeks: Object.keys(tree[year][month]), bone: mComp?.bone??null, muscle: mComp?.muscle??null, fat: mComp?.fat??null });
             continue;
           }
 
@@ -524,7 +524,7 @@
               <td><span class="arrow">${wOpen?"▼":"▶"}</span>${wLabel}</td>${gymCols(wAgg, wEx)}</tr>`;
             if (!wOpen) {
               const wComp = wEntries.slice().reverse().find(e => e.fat != null);
-              chartItems.push({ label: wLabel, weeks: [week], bone: wComp?.bone??null, muscle: wComp?.muscle??null, fat: wComp?.fat??null });
+              chartItems.push({ label: [year, mLabel, wLabel], weeks: [week], bone: wComp?.bone??null, muscle: wComp?.muscle??null, fat: wComp?.fat??null });
             }
             if (!wOpen) continue;
 
