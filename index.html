@@ -203,8 +203,8 @@
   <!-- GYM -->
   <div id="panel-gym" class="panel active">
     <div class="controls">
-      <button class="save-btn" onclick="saveGymView()">Save View</button>
       <button class="save-btn" onclick="updateFitbitMe(this, document.getElementById('gym-update-status'))">Update</button>
+      <button class="save-btn" onclick="saveGymView()">Save View</button>
       <span id="gym-update-status" style="font-size:0.8rem;color:#64748b"></span>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
         <span style="font-size:0.75rem;color:#64748b">Chart min</span>
@@ -359,20 +359,22 @@
       };
     }
 
-    function gymYearCols(entries, avgWtDelta=null, maxWtDelta=null) {
+    function gymYearCols(entries, avgWtDelta=null, maxWtDelta=null, open=false) {
       const f  = (v,d=1) => v != null ? fmt(v,d) : "";
       const fp = v => v != null ? fmt(v,1)+"%" : "";
       const fd = v => v == null ? "" : (v > 0 ? "+" : "") + Number(v).toLocaleString(undefined,{maximumFractionDigits:1,minimumFractionDigits:1});
       const dc = v => v == null ? "" : v < 0 ? " class=\"green\"" : v > 0 ? " class=\"red\"" : "";
       const first = [...entries].sort((a,b) => a.date < b.date ? -1 : 1)[0];
       if (!first) return `<td></td>`.repeat(12);
+      const weights = entries.map(e => e.weight).filter(v => v != null);
+      const maxWt = weights.length ? Math.max(...weights) : null;
       const gymCount = entries.filter(e => e.gym).length;
       const weekCount = new Set(entries.map(e => gymWeekStart(e.date))).size;
       const sessPerWk = weekCount > 0 ? gymCount / weekCount : null;
       return `<td>${f(first.weight)}</td><td>${f(calcBMI(first.weight))}</td>
-        <td></td><td></td>
-        <td>${f(first.bone)}</td><td>${f(first.muscle)}</td>
-        <td>${f(first.fat)}</td><td>${fp(calcFatPct(first.fat, first.muscle))}</td>
+        <td>${f(maxWt)}</td><td>${f(calcBMI(maxWt))}</td>
+        <td>${open ? "" : f(first.bone)}</td><td>${open ? "" : f(first.muscle)}</td>
+        <td>${open ? "" : f(first.fat)}</td><td>${open ? "" : fp(calcFatPct(first.fat, first.muscle))}</td>
         <td></td><td>${f(sessPerWk)}</td>
         <td${dc(avgWtDelta)}>${fd(avgWtDelta)}</td><td${dc(maxWtDelta)}>${fd(maxWtDelta)}</td>`;
     }
@@ -384,8 +386,8 @@
       const dc = v => v == null ? "" : v < 0 ? " class=\"green\"" : v > 0 ? " class=\"red\"" : "";
       return `<td>${f(agg.avgWt)}</td><td>${f(agg.bmi)}</td>
         <td>${f(agg.maxWt)}</td><td>${f(agg.maxBMI)}</td>
-        <td>${f(agg.bone)}</td><td>${f(agg.muscle)}</td>
-        <td>${f(agg.fat)}</td><td>${fp(agg.fatPct)}</td>
+        <td>${ex.hideComp ? "" : f(agg.bone)}</td><td>${ex.hideComp ? "" : f(agg.muscle)}</td>
+        <td>${ex.hideComp ? "" : f(agg.fat)}</td><td>${ex.hideComp ? "" : fp(agg.fatPct)}</td>
         <td>${agg.steps != null ? fmt(agg.steps,0) : ""}</td>
         <td>${ex.gymLabel !== undefined ? ex.gymLabel : f(ex.sessPerWk,1)}</td>
         <td${dc(ex.avgWtDelta)}>${fd(ex.avgWtDelta)}</td>
@@ -510,7 +512,7 @@
         const yAvgDelta = (allYearAggs[year]?.avgWt != null && prevYearAgg?.avgWt != null) ? allYearAggs[year].avgWt - prevYearAgg.avgWt : null;
         const yMaxDelta = (allYearAggs[year]?.maxWt != null && prevYearAgg?.maxWt != null) ? allYearAggs[year].maxWt - prevYearAgg.maxWt : null;
         html += `<tr class="row-year${yOpen?" open":""}" onclick="toggleGymYear('${year}')">
-          <td><span class="arrow">${yOpen?"▼":"▶"}</span>${year}</td>${gymYearCols(yEntries, yAvgDelta, yMaxDelta)}</tr>`;
+          <td><span class="arrow">${yOpen?"▼":"▶"}</span>${year}</td>${gymYearCols(yEntries, yAvgDelta, yMaxDelta, yOpen)}</tr>`;
         if (!yOpen) {
           const yWeeks = Object.values(tree[year]).flatMap(m => Object.keys(m));
           const yComp = Object.values(tree[year]).flatMap(m => Object.values(m)).flat().reverse().find(e => e.fat != null);
@@ -531,6 +533,7 @@
             sessPerWk: mWeekCount ? mAgg.gymCount / mWeekCount : null,
             avgWtDelta: (mAgg.avgWt != null && prevMonthAgg?.avgWt != null) ? mAgg.avgWt - prevMonthAgg.avgWt : null,
             maxWtDelta: (mAgg.maxWt != null && prevMonthAgg?.maxWt != null) ? mAgg.maxWt - prevMonthAgg.maxWt : null,
+            hideComp: mOpen,
           };
           html += `<tr class="row-month${mOpen?" open":""}" onclick="toggleGymMonth('${month}')">
             <td><span class="arrow">${mOpen?"▼":"▶"}</span>${mLabel}</td>${gymCols(mAgg, mEx)}</tr>`;
@@ -552,6 +555,7 @@
               sessPerWk: wAgg.gymCount,
               avgWtDelta: (wAgg.avgWt != null && prevAgg?.avgWt != null) ? wAgg.avgWt - prevAgg.avgWt : null,
               maxWtDelta: (wAgg.maxWt != null && prevAgg?.maxWt != null) ? wAgg.maxWt - prevAgg.maxWt : null,
+              hideComp: wOpen,
             };
             html += `<tr class="row-week${wOpen?" open":""}" onclick="toggleGymWeek('${week}')">
               <td><span class="arrow">${wOpen?"▼":"▶"}</span>${wLabel}</td>${gymCols(wAgg, wEx)}</tr>`;
