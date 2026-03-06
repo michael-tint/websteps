@@ -316,6 +316,7 @@
     let gymExpandedYears  = new Set();
     let gymExpandedMonths = new Set();
     let gymExpandedWeeks  = new Set();
+    let gymInitialized    = false;
     let gymChart = null;
 
     function updateCompChart() {
@@ -449,7 +450,8 @@
       }
 
       // On first render: restore saved view or default to week level
-      if (!gymExpandedYears.size) {
+      if (!gymInitialized) {
+        gymInitialized = true;
         const saved = localStorage.getItem("gymView");
         if (saved) {
           const s = JSON.parse(saved);
