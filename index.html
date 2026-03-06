@@ -1101,6 +1101,14 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (!creds) { setStatus("No credentials found in " + filename, "#f87171"); if (btn) btn.disabled = false; return; }
       const pat = getGhPat();
       if (!pat) { if (btn) btn.disabled = false; return; }
+
+      // Re-fetch the JSON to get the latest refresh token (workflow may have rotated it)
+      setStatus("Fetching latest token…");
+      const latestRes = await fetch(filename + "?t=" + Date.now()).catch(() => null);
+      if (latestRes?.ok) {
+        const latest = await latestRes.json();
+        if (latest?.creds?.refresh_token) creds.refresh_token = latest.creds.refresh_token;
+      }
       const fitbitAuth = btoa(`${creds.client_id}:${creds.client_secret}`);
 
       // 1. Refresh Fitbit token
