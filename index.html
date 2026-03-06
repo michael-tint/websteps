@@ -533,6 +533,12 @@
               const dLabel = new Date(dy,dm-1,dd).toLocaleString("default",{month:"short",day:"numeric"});
               html += `<tr class="row-day">
                 <td><span class="arrow"></span>${dLabel}</td>${gymCols(gymAggregate([e]))}</tr>`;
+              chartItems.push({
+                cy: year, cm: mLabel, cw: wLabel, cd: dLabel,
+                avgWt: e.weight ?? null, maxWt: e.weight ?? null, sess: null,
+                bone: e.bone ?? null, muscle: e.muscle ?? null, fat: e.fat ?? null,
+                weeks: [week],
+              });
             }
           }
         }
@@ -541,22 +547,24 @@
       document.getElementById("gym-tbody").innerHTML = html;
 
       // Combined chart — stacked bars (bone/muscle/fat) + lines (avg/max weight)
-      // Build 4-line hierarchical x-axis labels; suppress repeated year/month
+      // Build 4-line hierarchical x-axis labels; suppress repeated year/month/week
       chartItems.forEach((item, i) => {
         const prev = i > 0 ? chartItems[i-1] : null;
+        if (item.avgWt === undefined) { item.avgWt = weekAvgWt(item.weeks); item.maxWt = weekAvgMax(item.weeks); }
         item.label = [
           item.cy && item.cy !== prev?.cy ? item.cy : "",
           item.cm && item.cm !== prev?.cm ? item.cm : "",
-          item.cw || "",
-          "",
+          item.cw && item.cw !== prev?.cw ? item.cw : "",
+          item.cd || "",
         ];
       });
       const chartLabels = chartItems.map(i => i.label);
-      const avgWts = chartItems.map(i => weekAvgWt(i.weeks));
-      const maxWts = chartItems.map(i => weekAvgMax(i.weeks));
+      const avgWts = chartItems.map(i => i.avgWt);
+      const maxWts = chartItems.map(i => i.maxWt);
       const compMin = parseFloat(document.getElementById("comp-min").value) || 120;
       const compMax = parseFloat(document.getElementById("comp-max").value) || 190;
       const sessData = chartItems.map(i => {
+        if (i.sess !== undefined) return i.sess;
         const total = i.weeks.reduce((s,w) => s + (allWeekAggs[w]?.gymCount || 0), 0);
         return i.weeks.length ? total / i.weeks.length : null;
       });
@@ -577,6 +585,7 @@
           animation: false,
           responsive: true,
           maintainAspectRatio: false,
+          datasets: { bar: { grouped: false } },
           plugins: {
             legend: { labels: { color: "#94a3b8" } },
             tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}` } },
