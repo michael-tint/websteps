@@ -1102,11 +1102,14 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const pat = getGhPat();
       if (!pat) { if (btn) btn.disabled = false; return; }
 
-      // Re-fetch the JSON to get the latest refresh token (workflow may have rotated it)
+      // Re-fetch the JSON via GitHub API to get the latest refresh token (bypasses CDN cache)
       setStatus("Fetching latest token…");
-      const latestRes = await fetch(filename + "?t=" + Date.now()).catch(() => null);
+      const gh = { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json" };
+      const apiUrl = `https://api.github.com/repos/michael-tint/websteps/contents/${filename}`;
+      const latestRes = await fetch(apiUrl, { headers: gh }).catch(() => null);
       if (latestRes?.ok) {
-        const latest = await latestRes.json();
+        const info = await latestRes.json();
+        const latest = JSON.parse(atob(info.content.replace(/\n/g, "")));
         if (latest?.creds?.refresh_token) creds.refresh_token = latest.creds.refresh_token;
       }
       const fitbitAuth = btoa(`${creds.client_id}:${creds.client_secret}`);
