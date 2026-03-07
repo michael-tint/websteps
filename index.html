@@ -700,14 +700,19 @@
         meParsed  = (meRes  && meRes.ok)  ? await meRes.json()  : {};
         momParsed = (momRes && momRes.ok) ? await momRes.json() : {};
       }
-      const weightRes = await fetch("weight_data.json" + cacheBust).catch(() => null);
       meCreds  = meParsed.creds  || null;
       momCreds = momParsed.creds || null;
       allData = {
         me:  meParsed.data  || [],
         mom: momParsed.data || (Array.isArray(momParsed) ? momParsed : []),
       };
-const staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
+      let staticWeight;
+      if (gistData) {
+        staticWeight = gistData.weightData || {};
+      } else {
+        const weightRes = await fetch("weight_data.json" + cacheBust).catch(() => null);
+        staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
+      }
       const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
       // deep merge per date: local fields override static, but unset fields keep static values
       weightData = {};
@@ -1050,8 +1055,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (!res?.ok) return null;
       const gist = await res.json();
       return {
-        me:  JSON.parse(gist.files["me.json"]?.content  || "{}"),
-        mom: JSON.parse(gist.files["mom.json"]?.content || "{}"),
+        me:         JSON.parse(gist.files["me.json"]?.content          || "{}"),
+        mom:        JSON.parse(gist.files["mom.json"]?.content         || "{}"),
+        weightData: JSON.parse(gist.files["weight_data.json"]?.content || "{}"),
       };
     }
 
@@ -1063,8 +1069,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         body: JSON.stringify({
           description: "websteps data", public: false,
           files: {
-            "me.json":  { content: JSON.stringify({ creds: meCreds,  data: allData.me  || [] }, null, 2) },
-            "mom.json": { content: JSON.stringify({ creds: momCreds, data: allData.mom || [] }, null, 2) },
+            "me.json":          { content: JSON.stringify({ creds: meCreds,  data: allData.me  || [] }, null, 2) },
+            "mom.json":         { content: JSON.stringify({ creds: momCreds, data: allData.mom || [] }, null, 2) },
+            "weight_data.json": { content: JSON.stringify(weightData, null, 2) },
           }
         })
       }).catch(() => null);
@@ -1208,28 +1215,41 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       renderGym();
       renderWeight();
       renderDashboard();
-      setStatus("Done! Reloading…", "#4ade80");
-      setTimeout(() => location.reload(), 1000);
+      setStatus("Done!", "#4ade80");
+      if (btn) btn.disabled = false;
+      return true;
     }
 
-    function updateFitbitMe(btn, statusEl) {
-      return updateFitbit(btn, statusEl, "me.json", meCreds, "me", "me-update-btn", "me-update-status");
+    async function updateFitbitMe(btn, statusEl) {
+      const ok = await updateFitbit(btn, statusEl, "me.json", meCreds, "me", "me-update-btn", "me-update-status");
+      if (ok) { const s = statusEl || document.getElementById("me-update-status"); if (s) s.textContent = "Done! Reloading…"; setTimeout(() => location.reload(), 1000); }
     }
-    function updateFitbitMom(btn, statusEl) {
-      return updateFitbit(btn, statusEl, "mom.json", momCreds, "mom", "mom-update-btn", "mom-update-status");
+    async function updateFitbitMom(btn, statusEl) {
+      const ok = await updateFitbit(btn, statusEl, "mom.json", momCreds, "mom", "mom-update-btn", "mom-update-status");
+      if (ok) { const s = statusEl || document.getElementById("mom-update-status"); if (s) s.textContent = "Done! Reloading…"; setTimeout(() => location.reload(), 1000); }
     }
     async function updateFitbitBoth(btn, statusEl) {
       if (btn) btn.disabled = true;
       const noBtn = { disabled: false };
       await updateFitbit(noBtn, statusEl, "me.json",  meCreds,  "me",  null, null);
       await updateFitbit(noBtn, statusEl, "mom.json", momCreds, "mom", null, null);
-      if (btn) btn.disabled = false;
+      const setStatus = (msg, color) => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; } };
+      setStatus("Done! Reloading…", "#4ade80");
+      setTimeout(() => location.reload(), 1000);
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
     function saveWeightData() {
       localStorage.setItem("weightData", JSON.stringify(weightData));
-      // TODO: replace with API call when backend is ready
+      // Fire-and-forget Gist save
+      const pat    = localStorage.getItem("gh_pat");
+      const gistId = localStorage.getItem("websteps_gist_id");
+      if (pat && gistId) {
+        fetch(`https://api.github.com/gists/${gistId}`, {
+          method: "PATCH", headers: gistHeaders(pat),
+          body: JSON.stringify({ files: { "weight_data.json": { content: JSON.stringify(weightData, null, 2) } } }),
+        }).catch(() => null);
+      }
     }
 
     function updateWeight(date, field, value) {
