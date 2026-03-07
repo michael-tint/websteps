@@ -1208,8 +1208,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       renderGym();
       renderWeight();
       renderDashboard();
-      setStatus("Done!", "#4ade80");
-      if (btn) btn.disabled = false;
+      setStatus("Done! Reloading…", "#4ade80");
+      setTimeout(() => location.reload(), 1000);
     }
 
     function updateFitbitMe(btn, statusEl) {
