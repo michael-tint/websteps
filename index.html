@@ -852,8 +852,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
           }
           items.push({ type:"month", key:month, label:labelMonth(month), me:avgSteps(meM), mom:avgSteps(momM), open:true });
 
-          const meWeeks  = groupBy(meM.filter(r=>r.date.startsWith(month)),  r=>r.week);
-          const momWeeks = groupBy(momM.filter(r=>r.date.startsWith(month)), r=>r.week);
+          const meWeeks  = groupBy(meM.filter(r=>r.date.startsWith(month)),  r=>r.week || gymWeekStart(r.date));
+          const momWeeks = groupBy(momM.filter(r=>r.date.startsWith(month)), r=>r.week || gymWeekStart(r.date));
           const weeks    = mergeKeys(meWeeks, momWeeks);
 
           for (const week of weeks) {
@@ -1207,8 +1207,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       byDate[today] = byDate[today] || {};  // always create today's entry
       for (const [d, fields] of Object.entries(byDate)) {
         const ex = records.find(r => r.date === d);
-        if (ex) Object.assign(ex, fields);
-        else records.push({ date: d, ...fields });
+        if (ex) { Object.assign(ex, fields); if (!ex.week) ex.week = gymWeekStart(d); }
+        else records.push({ date: d, week: gymWeekStart(d), ...fields });
       }
       records.sort((a, b) => a.date < b.date ? -1 : 1);
 
