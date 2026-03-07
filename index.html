@@ -1197,7 +1197,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const hrData = await fitbitGet(`https://api.fitbit.com/1/user/-/activities/heart/date/${startDate}/${yesterday}.json`);
       for (const e of hrData["activities-heart"] || []) { const rhr = e.value?.restingHeartRate; if (rhr) store(e.dateTime, "restingHeartRate", rhr); }
       setStatus("Fetching weight…");
-      const wtData = await fitbitGet(`https://api.fitbit.com/1/user/-/body/log/weight/date/${startDate}/${today}.json`);
+      const wtData = await fitbitGet(`https://api.fitbit.com/1/user/-/body/log/weight/date/today/30d.json`);
       for (const e of wtData.weight || []) { const w = Math.round(parseFloat(e.weight) * 10) / 10; if (!byDate[e.date]?.weight || w < byDate[e.date].weight) { byDate[e.date] = byDate[e.date] || {}; byDate[e.date].weight = w; } }
       for (const [d, fields] of Object.entries(byDate)) {
         const ex = records.find(r => r.date === d);
