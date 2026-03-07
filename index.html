@@ -1174,13 +1174,16 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       // 2. Full sync — activity + weight
       const fitbitHdrs = { "Authorization": `Bearer ${accessToken}`, "Accept-Language": "en_US" };
       const fitbitGet = async (url) => { const r = await fetch(url, { headers: fitbitHdrs }).catch(() => null); return r?.ok ? r.json() : {}; };
-      const today = new Date().toISOString().slice(0, 10);
-      const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+      const today = todayEST();
+      const [_ty, _tm, _td] = today.split("-").map(Number);
+      const _yd = new Date(_ty, _tm - 1, _td - 1);
+      const yesterday = `${_yd.getFullYear()}-${String(_yd.getMonth()+1).padStart(2,"0")}-${String(_yd.getDate()).padStart(2,"0")}`;
       const records = allData[dataKey];
       const withSteps = records.filter(r => r.steps > 0);
       const lastSteps = withSteps.length ? withSteps.reduce((a, b) => a.date > b.date ? a : b).date : null;
-      const sevenAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
-      const twoBefore = lastSteps ? new Date(new Date(lastSteps) - 2 * 864e5).toISOString().slice(0, 10) : sevenAgo;
+      const _s7 = new Date(_ty, _tm - 1, _td - 7);
+      const sevenAgo = `${_s7.getFullYear()}-${String(_s7.getMonth()+1).padStart(2,"0")}-${String(_s7.getDate()).padStart(2,"0")}`;
+      const twoBefore = lastSteps ? (() => { const [ly,lm,ld]=lastSteps.split("-").map(Number); const d=new Date(ly,lm-1,ld-2); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })() : sevenAgo;
       const startDate = twoBefore < sevenAgo ? twoBefore : sevenAgo;
       const byDate = {};
       const store = (d, k, v) => { const n = parseFloat(v); if (!isNaN(n) && (n !== 0 || k === "steps" || k === "floors")) { byDate[d] = byDate[d] || {}; byDate[d][k] = Number.isInteger(n) ? n : Math.round(n * 10) / 10; } };
