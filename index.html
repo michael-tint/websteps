@@ -183,6 +183,7 @@
   <div id="panel-dashboard" class="panel">
     <div class="controls">
       <button class="save-btn" onclick="updateFitbitBoth(this, document.getElementById('steps-update-status'))">Update</button>
+      <button class="save-btn" onclick="saveStepsView()">Save View</button>
       <span id="steps-update-status" style="font-size:0.8rem;color:#64748b"></span>
     </div>
     <div class="summary" id="dash-cards"></div>
@@ -302,9 +303,10 @@
     const STEPS_FROM = "2025-01-01";
     let stepsChart = null;
     let globalMaxSteps = 0;
-    let expandedYears  = new Set();
-    let expandedMonths = new Set();
-    let expandedWeeks  = new Set();
+    let expandedYears    = new Set();
+    let expandedMonths   = new Set();
+    let expandedWeeks    = new Set();
+    let stepsInitialized = false;
 
     const RAW_COLS = [
       {key:"date",label:"Date"},{key:"steps",label:"Steps"},{key:"caloriesOut",label:"Calories"},
@@ -722,9 +724,7 @@
       for (const r of [...(allData.me||[]), ...(allData.mom||[])].filter(r => r.date >= STEPS_FROM))
         if (r.steps > globalMaxSteps) globalMaxSteps = r.steps;
 
-      // Expand all years by default → opens to month level
-      for (const r of [...(allData.me||[]), ...(allData.mom||[])])
-        expandedYears.add(r.date.slice(0,4));
+      stepsInitialized = false; // reset so render() re-runs init on next call
 
       for (const user of ["me","mom"]) {
         const dates = (allData[user]||[]).map(r=>r.date).sort();
@@ -1001,9 +1001,40 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
     // ── main render ───────────────────────────────────────────────────────────
     function render() {
+      if (!stepsInitialized) {
+        stepsInitialized = true;
+        expandedYears.clear(); expandedMonths.clear(); expandedWeeks.clear();
+        const saved = localStorage.getItem("stepsView");
+        if (saved) {
+          const s = JSON.parse(saved);
+          if (s.v === 1) {
+            s.years.forEach(y => expandedYears.add(y));
+            s.months.forEach(m => expandedMonths.add(m));
+            s.weeks.forEach(w => expandedWeeks.add(w));
+          } else {
+            localStorage.removeItem("stepsView");
+            for (const r of [...(allData.me||[]), ...(allData.mom||[])])
+              expandedYears.add(r.date.slice(0,4));
+          }
+        } else {
+          for (const r of [...(allData.me||[]), ...(allData.mom||[])])
+            expandedYears.add(r.date.slice(0,4));
+        }
+      }
       const items = buildItems();
       renderPivotTable(items);
       renderChart(items);
+    }
+
+    function saveStepsView() {
+      localStorage.setItem("stepsView", JSON.stringify({
+        v: 1,
+        years:  [...expandedYears],
+        months: [...expandedMonths],
+        weeks:  [...expandedWeeks],
+      }));
+      const btn = [...document.querySelectorAll(".save-btn")].find(b => b.closest("#panel-dashboard") && b.textContent.trim() === "Save View");
+      if (btn) { btn.textContent = "Saved ✓"; setTimeout(() => btn.textContent = "Save View", 1500); }
     }
 
     function renderDashboard() {
