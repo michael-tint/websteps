@@ -377,11 +377,13 @@
       const gymCount = entries.filter(e => e.gym).length;
       const weekCount = new Set(entries.map(e => gymWeekStart(e.date))).size;
       const sessPerWk = weekCount > 0 ? gymCount / weekCount : null;
+      const stepVals = entries.map(e => e.steps).filter(v => v != null && v > 0);
+      const steps = stepVals.length ? Math.round(stepVals.reduce((s,v) => s+v, 0) / stepVals.length) : null;
       return `<td>${f(first.weight)}</td><td>${f(calcBMI(first.weight))}</td>
         <td>${f(maxWt)}</td><td>${f(calcBMI(maxWt))}</td>
         <td>${open ? "" : f(firstComp?.bone)}</td><td>${open ? "" : f(firstComp?.muscle)}</td>
         <td>${open ? "" : f(firstComp?.fat)}</td><td>${open ? "" : fp(calcFatPct(firstComp?.fat, firstComp?.muscle))}</td>
-        <td></td><td>${f(sessPerWk)}</td>
+        <td>${steps != null ? fmt(steps, 0) : ""}</td><td>${f(sessPerWk)}</td>
         <td${dc(avgWtDelta)}>${fd(avgWtDelta)}</td><td${dc(maxWtDelta)}>${fd(maxWtDelta)}</td>`;
     }
 
@@ -460,13 +462,12 @@
         const saved = localStorage.getItem("gymView");
         if (saved) {
           const s = JSON.parse(saved);
-          s.years.forEach(y => gymExpandedYears.add(y));
-          s.months.forEach(m => gymExpandedMonths.add(m));
-          s.weeks.forEach(w => gymExpandedWeeks.add(w));
-        } else {
-          for (const y of Object.keys(tree)) gymExpandedYears.add(y);
-          for (const y of Object.keys(tree))
-            for (const m of Object.keys(tree[y])) gymExpandedMonths.add(m);
+          if (s.v === 2) {
+            s.years.forEach(y => gymExpandedYears.add(y));
+            s.weeks.forEach(w => gymExpandedWeeks.add(w));
+          } else {
+            localStorage.removeItem("gymView"); // discard old format
+          }
         }
       }
 
@@ -653,10 +654,9 @@
         }
       } else {
         gymExpandedYears.add(year);
-        // Re-expand all months in this year (using week-start month keys)
-        for (const d of Object.keys(weightData)) {
-          const w = gymWeekStart(d);
-          if (w.startsWith(year)) gymExpandedMonths.add(w.slice(0,7));
+        for (const m of [...gymExpandedMonths]) if (m.startsWith(year)) {
+          gymExpandedMonths.delete(m);
+          for (const w of [...gymExpandedWeeks]) if (w.startsWith(m)) gymExpandedWeeks.delete(w);
         }
       }
       renderGym();
@@ -674,13 +674,12 @@
     }
     function saveGymView() {
       localStorage.setItem("gymView", JSON.stringify({
-        years:  [...gymExpandedYears],
-        months: [...gymExpandedMonths],
-        weeks:  [...gymExpandedWeeks],
+        v: 2,
+        years: [...gymExpandedYears],
+        weeks: [...gymExpandedWeeks],
       }));
-      const btn = document.querySelector(".save-btn");
-      btn.textContent = "Saved ✓";
-      setTimeout(() => btn.textContent = "Save View", 1500);
+      const btn = [...document.querySelectorAll(".save-btn")].find(b => b.textContent.trim() === "Save View");
+      if (btn) { btn.textContent = "Saved ✓"; setTimeout(() => btn.textContent = "Save View", 1500); }
     }
 
     // ── init ──────────────────────────────────────────────────────────────────
@@ -886,7 +885,13 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
           expandedMonths.delete(m);
           for (const w of [...expandedWeeks]) if (w.startsWith(m)) expandedWeeks.delete(w);
         }
-      } else { expandedYears.add(year); }
+      } else {
+        expandedYears.add(year);
+        for (const m of [...expandedMonths]) if (m.startsWith(year)) {
+          expandedMonths.delete(m);
+          for (const w of [...expandedWeeks]) if (w.startsWith(m)) expandedWeeks.delete(w);
+        }
+      }
       render();
     }
     function toggleMonth(month) {
