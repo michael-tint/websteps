@@ -17,6 +17,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Fetch Fitbit data
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GH_PAT:  ${{ secrets.GH_PAT }}
         run: python fetch_fitbit.py
 
       - name: Commit and push

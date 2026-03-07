@@ -4,12 +4,25 @@ Window: 2 days before the last date with steps through yesterday, or last 7 days
 Weight is fetched through today (so today's weigh-in is always captured).
 Uses time series endpoints (same as backfill) to avoid permission issues with the daily summary endpoint.
 """
-import json, os, urllib.request, urllib.parse, base64
+import json, os, sys, urllib.request, urllib.parse, base64
 from datetime import date, timedelta
 
-_me_file = os.path.join(os.path.dirname(__file__), "me.json")
-with open(_me_file) as f:
-    _me = json.load(f)
+GIST_ID = os.environ.get("GIST_ID")
+GH_PAT  = os.environ.get("GH_PAT")
+_target = sys.argv[1] if len(sys.argv) > 1 else "me.json"
+_me_file = os.path.join(os.path.dirname(__file__), _target)
+
+def _gist_headers():
+    return {"Authorization": f"token {GH_PAT}", "Accept": "application/vnd.github+json"}
+
+if GIST_ID and GH_PAT:
+    req = urllib.request.Request(f"https://api.github.com/gists/{GIST_ID}", headers=_gist_headers())
+    gist = json.loads(urllib.request.urlopen(req).read())
+    _me = json.loads(gist["files"][_target]["content"])
+    print(f"Loaded {_target} from Gist.")
+else:
+    with open(_me_file) as f:
+        _me = json.load(f)
 _creds = _me.get("creds", {})
 client_id     = _creds["client_id"]
 client_secret = _creds["client_secret"]
@@ -51,10 +64,16 @@ except urllib.error.HTTPError as e:
     raise
 access_token = tokens["access_token"]
 
-# Rotate refresh token back into me.json
+# Rotate refresh token
 _me["creds"]["refresh_token"] = tokens["refresh_token"]
-with open(_me_file, "w") as f:
-    json.dump(_me, f, indent=2)
+if GIST_ID and GH_PAT:
+    _patch = json.dumps({"files": {_target: {"content": json.dumps(_me, indent=2)}}}).encode()
+    _req = urllib.request.Request(f"https://api.github.com/gists/{GIST_ID}", data=_patch,
+        headers={**_gist_headers(), "Content-Type": "application/json"}, method="PATCH")
+    urllib.request.urlopen(_req)
+else:
+    with open(_me_file, "w") as f:
+        json.dump(_me, f, indent=2)
 print("Refresh token rotated.")
 
 
@@ -150,6 +169,13 @@ for date_str, fields in by_date.items():
 
 records.sort(key=lambda r: r["date"])
 
-with open(_me_file, "w") as f:
-    json.dump(_me, f, indent=2)
-print("Done.")
+if GIST_ID and GH_PAT:
+    _patch = json.dumps({"files": {_target: {"content": json.dumps(_me, indent=2)}}}).encode()
+    _req = urllib.request.Request(f"https://api.github.com/gists/{GIST_ID}", data=_patch,
+        headers={**_gist_headers(), "Content-Type": "application/json"}, method="PATCH")
+    urllib.request.urlopen(_req)
+    print("Saved to Gist.")
+else:
+    with open(_me_file, "w") as f:
+        json.dump(_me, f, indent=2)
+    print("Done.")

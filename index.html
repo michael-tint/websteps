@@ -686,13 +686,21 @@
     // ── init ──────────────────────────────────────────────────────────────────
     async function init() {
       const cacheBust = "?t=" + Date.now();
-      const [meRes, momRes, weightRes] = await Promise.all([
-        fetch("me.json"          + cacheBust).catch(() => null),
-        fetch("mom.json"         + cacheBust).catch(() => null),
-        fetch("weight_data.json" + cacheBust).catch(() => null),
-      ]);
-      const meParsed  = (meRes  && meRes.ok)  ? await meRes.json()  : {};
-      const momParsed = (momRes && momRes.ok) ? await momRes.json() : {};
+      const storedPat = localStorage.getItem("gh_pat");
+      const gistData  = storedPat ? await readFromGist(storedPat) : null;
+      let meParsed, momParsed;
+      if (gistData) {
+        meParsed  = gistData.me  || {};
+        momParsed = gistData.mom || {};
+      } else {
+        const [meRes, momRes] = await Promise.all([
+          fetch("me.json"  + cacheBust).catch(() => null),
+          fetch("mom.json" + cacheBust).catch(() => null),
+        ]);
+        meParsed  = (meRes  && meRes.ok)  ? await meRes.json()  : {};
+        momParsed = (momRes && momRes.ok) ? await momRes.json() : {};
+      }
+      const weightRes = await fetch("weight_data.json" + cacheBust).catch(() => null);
       meCreds  = meParsed.creds  || null;
       momCreds = momParsed.creds || null;
       allData = {
@@ -1021,35 +1029,70 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       ).join("");
     }
 
-    // ── GitHub persistence helpers ────────────────────────────────────────────
+    // ── Gist persistence helpers ──────────────────────────────────────────────
     function getGhPat() {
       let pat = localStorage.getItem("gh_pat");
       if (!pat) {
-        pat = prompt("Enter a GitHub Personal Access Token with 'repo' scope.\nIt will be saved locally for future use.");
+        pat = prompt("Enter a GitHub Personal Access Token with 'repo' and 'gist' scopes.\nIt will be saved locally for future use.");
         if (pat) localStorage.setItem("gh_pat", pat.trim());
       }
       return pat || null;
     }
 
-    async function saveToGitHub(filename, creds, data, setStatus) {
+    function gistHeaders(pat) {
+      return { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
+    }
+
+    async function readFromGist(pat) {
+      const gistId = localStorage.getItem("websteps_gist_id");
+      if (!gistId) return null;
+      const res = await fetch(`https://api.github.com/gists/${gistId}`, { headers: gistHeaders(pat) }).catch(() => null);
+      if (!res?.ok) return null;
+      const gist = await res.json();
+      return {
+        me:  JSON.parse(gist.files["me.json"]?.content  || "{}"),
+        mom: JSON.parse(gist.files["mom.json"]?.content || "{}"),
+      };
+    }
+
+    async function getOrCreateGist(pat) {
+      let gistId = localStorage.getItem("websteps_gist_id");
+      if (gistId) return gistId;
+      const res = await fetch("https://api.github.com/gists", {
+        method: "POST", headers: gistHeaders(pat),
+        body: JSON.stringify({
+          description: "websteps data", public: false,
+          files: {
+            "me.json":  { content: JSON.stringify({ creds: meCreds,  data: allData.me  || [] }, null, 2) },
+            "mom.json": { content: JSON.stringify({ creds: momCreds, data: allData.mom || [] }, null, 2) },
+          }
+        })
+      }).catch(() => null);
+      if (!res?.ok) {
+        if (res?.status === 401 || res?.status === 403) localStorage.removeItem("gh_pat");
+        return null;
+      }
+      gistId = (await res.json()).id;
+      localStorage.setItem("websteps_gist_id", gistId);
+      alert(`Gist created! Add this as a GitHub Actions secret named GIST_ID:\n\n${gistId}\n\nAlso add your PAT as GH_PAT secret so the daily sync uses the Gist too.`);
+      return gistId;
+    }
+
+    async function saveToGist(filename, creds, data, setStatus) {
       const pat = getGhPat();
       if (!pat) return false;
-      const gh = { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
-      const url = `https://api.github.com/repos/michael-tint/websteps/contents/${filename}`;
-      if (setStatus) setStatus("Getting file info…");
-      const infoRes = await fetch(url, { headers: gh }).catch(() => null);
-      if (!infoRes?.ok) {
-        if (infoRes?.status === 401) localStorage.removeItem("gh_pat");
-        if (setStatus) setStatus(`Save failed (${infoRes?.status})`, "#f87171");
+      const gistId = await getOrCreateGist(pat);
+      if (!gistId) { if (setStatus) setStatus("Failed to create Gist — does your PAT have 'gist' scope?", "#f87171"); return false; }
+      if (setStatus) setStatus("Saving…");
+      const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+        method: "PATCH", headers: gistHeaders(pat),
+        body: JSON.stringify({ files: { [filename]: { content: JSON.stringify({ creds, data }, null, 2) } } })
+      }).catch(() => null);
+      if (!res?.ok) {
+        if (res?.status === 401) localStorage.removeItem("gh_pat");
+        if (setStatus) setStatus(`Save failed (${res?.status})`, "#f87171");
         return false;
       }
-      const { sha } = await infoRes.json();
-      const content = btoa(unescape(encodeURIComponent(JSON.stringify({ creds, data }, null, 2))));
-      if (setStatus) setStatus("Saving…");
-      const putRes = await fetch(url,
-        { method: "PUT", headers: gh, body: JSON.stringify({ message: `Update ${filename} [skip ci]`, content, sha }) }
-      ).catch(() => null);
-      if (!putRes?.ok) { if (setStatus) setStatus(`Save failed (${putRes?.status})`, "#f87171"); return false; }
       return true;
     }
 
@@ -1062,8 +1105,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (location.hostname === "localhost") {
         await fetch("/delete-me-row", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) }).catch(() => null);
       } else {
-        const ok = await saveToGitHub(filename, creds, allData[key]);
-        if (!ok) alert("Failed to save to GitHub.");
+        const ok = await saveToGist(filename, creds, allData[key]);
+        if (!ok) alert("Failed to save to Gist.");
       }
     }
 
@@ -1102,16 +1145,11 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const pat = getGhPat();
       if (!pat) { if (btn) btn.disabled = false; return; }
 
-      // Re-fetch the JSON via GitHub API to get the latest refresh token (bypasses CDN cache)
+      // Re-fetch latest token from Gist (always current, no CDN cache issues)
       setStatus("Fetching latest token…");
-      const gh = { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json" };
-      const apiUrl = `https://api.github.com/repos/michael-tint/websteps/contents/${filename}`;
-      const latestRes = await fetch(apiUrl, { headers: gh }).catch(() => null);
-      if (latestRes?.ok) {
-        const info = await latestRes.json();
-        const latest = JSON.parse(atob(info.content.replace(/\n/g, "")));
-        if (latest?.creds?.refresh_token) creds.refresh_token = latest.creds.refresh_token;
-      }
+      const gistLatest = await readFromGist(pat);
+      if (gistLatest?.[dataKey]?.creds?.refresh_token)
+        creds.refresh_token = gistLatest[dataKey].creds.refresh_token;
       const fitbitAuth = btoa(`${creds.client_id}:${creds.client_secret}`);
 
       // 1. Refresh Fitbit token
@@ -1141,8 +1179,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         else { allData[dataKey].push({ date: today, weight: w }); allData[dataKey].sort((a, b) => a.date < b.date ? -1 : 1); }
       }
 
-      // 3. Save to GitHub
-      const ok = await saveToGitHub(filename, creds, allData[dataKey], setStatus);
+      // 3. Save to Gist
+      const ok = await saveToGist(filename, creds, allData[dataKey], setStatus);
       if (!ok) { if (btn) btn.disabled = false; return; }
 
       // 4. Refresh display
