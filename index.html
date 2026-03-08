@@ -730,8 +730,8 @@
       meCreds  = meParsed.creds  || null;
       momCreds = momParsed.creds || null;
       allData = {
-        me:  meParsed.data  || [],
-        mom: momParsed.data || (Array.isArray(momParsed) ? momParsed : []),
+        me:  (meParsed.data  || []).filter(r => r.date >= STEPS_FROM),
+        mom: (momParsed.data || (Array.isArray(momParsed) ? momParsed : [])).filter(r => r.date >= STEPS_FROM),
       };
       let staticWeight;
       if (gistData) {
