@@ -185,6 +185,12 @@
       <button class="save-btn" onclick="updateFitbitBoth(this, document.getElementById('steps-update-status'))">Update</button>
       <button class="save-btn" onclick="saveStepsView()">Save View</button>
       <span id="steps-update-status" style="font-size:0.8rem;color:#64748b"></span>
+      <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
+        <span style="font-size:0.75rem;color:#64748b">From</span>
+        <input type="date" id="steps-from" oninput="render()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
+        <span style="font-size:0.75rem;color:#64748b">To</span>
+        <input type="date" id="steps-to" oninput="render()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
+      </span>
     </div>
     <div class="summary" id="dash-cards"></div>
     <div class="dash-main">
@@ -208,7 +214,11 @@
       <button class="save-btn" onclick="saveGymView()">Save View</button>
       <span id="gym-update-status" style="font-size:0.8rem;color:#64748b"></span>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
-        <span style="font-size:0.75rem;color:#64748b">Chart min</span>
+        <span style="font-size:0.75rem;color:#64748b">From</span>
+        <input type="date" id="gym-from" oninput="renderGym()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
+        <span style="font-size:0.75rem;color:#64748b">To</span>
+        <input type="date" id="gym-to" oninput="renderGym()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
+        <span style="font-size:0.75rem;color:#64748b;margin-left:0.6rem">Chart min</span>
         <input type="text" inputmode="numeric" id="comp-min" value="120" oninput="updateCompChart()" style="width:4rem;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.9rem;text-align:right;">
         <span style="font-size:0.75rem;color:#64748b">max</span>
         <input type="text" inputmode="numeric" id="comp-max" value="190" oninput="updateCompChart()" style="width:4rem;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.9rem;text-align:right;">
@@ -275,6 +285,12 @@
     <div class="controls">
       <button class="save-btn" onclick="updateFitbitBoth(this, document.getElementById('weight-update-status'))">Update</button>
       <span id="weight-update-status" style="font-size:0.8rem;color:#64748b"></span>
+      <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
+        <span style="font-size:0.75rem;color:#64748b">From</span>
+        <input type="date" id="weight-from" oninput="renderWeight()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
+        <span style="font-size:0.75rem;color:#64748b">To</span>
+        <input type="date" id="weight-to" oninput="renderWeight()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
+      </span>
     </div>
     <div class="summary" id="weight-cards"></div>
     <div class="table-wrap" style="flex:1;min-height:0;">
@@ -415,8 +431,10 @@
       for (const r of allData.me || []) { meByDate[r.date] = r.steps; meWeightByDate[r.date] = r.weight; }
 
       // All entries from weightData, oldest first for tree building
+      const gymFrom = document.getElementById("gym-from")?.value || "";
+      const gymTo   = document.getElementById("gym-to")?.value   || "";
       const allEntries = Object.entries(weightData)
-        .filter(([d]) => d <= today)
+        .filter(([d]) => d <= today && (!gymFrom || d >= gymFrom) && (!gymTo || d <= gymTo))
         .sort(([a],[b]) => a < b ? -1 : 1)
         .map(([date, e]) => ({ date, ...e, steps: meByDate[date] ?? null, weight: meWeightByDate[date] ?? e.weight ?? null }));
 
@@ -824,8 +842,10 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     // ── build flat item list ──────────────────────────────────────────────────
     function buildItems() {
       const items = [];
-      const meAll  = (allData.me  || []).filter(r => r.date >= STEPS_FROM);
-      const momAll = (allData.mom || []).filter(r => r.date >= STEPS_FROM);
+      const stepsFrom = document.getElementById("steps-from")?.value || "";
+      const stepsTo   = document.getElementById("steps-to")?.value   || "";
+      const meAll  = (allData.me  || []).filter(r => r.date >= STEPS_FROM && (!stepsFrom || r.date >= stepsFrom) && (!stepsTo || r.date <= stepsTo));
+      const momAll = (allData.mom || []).filter(r => r.date >= STEPS_FROM && (!stepsFrom || r.date >= stepsFrom) && (!stepsTo || r.date <= stepsTo));
       const meYears  = groupBy(meAll,  r=>r.date.slice(0,4));
       const momYears = groupBy(momAll, r=>r.date.slice(0,4));
       const years    = mergeKeys(meYears, momYears);
@@ -1364,7 +1384,10 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         <div class="card"><div class="card-label">Month Delta</div><div class="card-value ${deltaClass(monthDelta)}">${fmtDelta(monthDelta)}</div></div>
       `;
 
-      document.getElementById("weight-tbody").innerHTML = allDates.map(date => {
+      const weightFrom = document.getElementById("weight-from")?.value || "";
+      const weightTo   = document.getElementById("weight-to")?.value   || "";
+      const filteredDates = allDates.filter(d => (!weightFrom || d >= weightFrom) && (!weightTo || d <= weightTo));
+      document.getElementById("weight-tbody").innerHTML = filteredDates.map(date => {
         const steps = meByDate[date] != null ? fmt(meByDate[date]) : "—";
         return `<tr>
           <td style="text-align:left;color:#94a3b8">${date}</td>
