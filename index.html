@@ -538,7 +538,7 @@
       }
       function weekAvgMax(weeks) {
         const v = weeks.map(w => allWeekAggs[w]?.maxWt).filter(x => x != null);
-        return v.length ? v.reduce((s,x)=>s+x,0)/v.length : null;
+        return v.length ? Math.max(...v) : null;
       }
 
       for (const year of years) {
