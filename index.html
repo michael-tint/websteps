@@ -440,6 +440,7 @@
       const extraEntries = (allData.me || [])
         .filter(r => r.weight != null && !weightDataDates.has(r.date)
                   && r.date <= today
+                  && gymWeekStart(r.date).slice(0,4) === r.date.slice(0,4)
                   && (!gymFrom || r.date >= gymFrom)
                   && (!gymTo   || r.date <= gymTo))
         .map(r => ({ date: r.date, steps: meByDate[r.date] ?? null, weight: r.weight }));
