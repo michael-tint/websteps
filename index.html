@@ -433,10 +433,18 @@
       // All entries from weightData, oldest first for tree building
       const gymFrom = document.getElementById("gym-from")?.value || "";
       const gymTo   = document.getElementById("gym-to")?.value   || "";
-      const allEntries = Object.entries(weightData)
+      const weightDataDates = new Set(Object.keys(weightData));
+      const baseEntries = Object.entries(weightData)
         .filter(([d]) => d <= today && (!gymFrom || d >= gymFrom) && (!gymTo || d <= gymTo))
-        .sort(([a],[b]) => a < b ? -1 : 1)
         .map(([date, e]) => ({ date, ...e, steps: meByDate[date] ?? null, weight: meWeightByDate[date] ?? e.weight ?? null }));
+      const extraEntries = (allData.me || [])
+        .filter(r => r.weight != null && !weightDataDates.has(r.date)
+                  && r.date <= today
+                  && (!gymFrom || r.date >= gymFrom)
+                  && (!gymTo   || r.date <= gymTo))
+        .map(r => ({ date: r.date, steps: meByDate[r.date] ?? null, weight: r.weight }));
+      const allEntries = [...baseEntries, ...extraEntries]
+        .sort((a, b) => a.date < b.date ? -1 : 1);
 
       const totalGym   = allEntries.filter(e => e.gym).length;
       const weekGym    = allEntries.filter(e => e.gym && e.date >= weekStart && e.date <= today).length;
@@ -1268,6 +1276,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (!ok) { if (btn) btn.disabled = false; return; }
 
       // 4. Refresh display
+      stepsInitialized = false;
       globalMaxSteps = 0;
       for (const r of allData.me) if (r.steps > globalMaxSteps) globalMaxSteps = r.steps;
       document.getElementById(`${dataKey}-tbody`).innerHTML = "";
@@ -1275,6 +1284,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       renderGym();
       renderWeight();
       renderDashboard();
+      render();
       setStatus("Done!", "#4ade80");
       if (btn) btn.disabled = false;
       return true;
