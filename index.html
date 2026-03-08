@@ -387,17 +387,17 @@
       const fd = v => v == null ? "" : (v > 0 ? "+" : "") + Number(v).toLocaleString(undefined,{maximumFractionDigits:1,minimumFractionDigits:1});
       const dc = v => v == null ? "" : v < 0 ? " class=\"green\"" : v > 0 ? " class=\"red\"" : "";
       const sorted = [...entries].sort((a,b) => a.date < b.date ? -1 : 1);
-      const first = sorted[0];
-      if (!first) return `<td></td>`.repeat(12);
+      if (!sorted[0]) return `<td></td>`.repeat(12);
       const firstComp = sorted.find(e => e.bone != null || e.muscle != null || e.fat != null) || null;
       const weights = entries.map(e => e.weight).filter(v => v != null);
+      const avgWt = weights.length ? weights.reduce((s,v)=>s+v,0)/weights.length : null;
       const maxWt = weights.length ? Math.max(...weights) : null;
       const gymCount = entries.filter(e => e.gym).length;
       const weekCount = new Set(entries.map(e => gymWeekStart(e.date))).size;
       const sessPerWk = weekCount > 0 ? gymCount / weekCount : null;
       const stepVals = entries.map(e => e.steps).filter(v => v != null && v > 0);
       const steps = stepVals.length ? Math.round(stepVals.reduce((s,v) => s+v, 0) / stepVals.length) : null;
-      return `<td>${f(first.weight)}</td><td>${f(calcBMI(first.weight))}</td>
+      return `<td>${f(avgWt)}</td><td>${f(calcBMI(avgWt))}</td>
         <td>${f(maxWt)}</td><td>${f(calcBMI(maxWt))}</td>
         <td>${open ? "" : f(firstComp?.bone)}</td><td>${open ? "" : f(firstComp?.muscle)}</td>
         <td>${open ? "" : f(firstComp?.fat)}</td><td>${open ? "" : fp(calcFatPct(firstComp?.fat, firstComp?.muscle))}</td>
