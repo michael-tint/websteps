@@ -1400,7 +1400,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const filteredDates = allDates.filter(d => (!weightFrom || d >= weightFrom) && (!weightTo || d <= weightTo));
       document.getElementById("weight-tbody").innerHTML = filteredDates.map(date => {
         const steps = meByDate[date] != null ? fmt(meByDate[date]) : "—";
-        const isSunday = new Date(date + "T12:00:00").getDay() === 0;
+        const isSunday = new Date(date + "T12:00:00").getDay() === 6;
         const rowStyle = isSunday ? ' style="border-top:2px solid #334155"' : '';
         return `<tr${rowStyle}>
           <td style="text-align:left;color:#94a3b8">${date}</td>
