@@ -1094,9 +1094,11 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       `;
       const tbody = document.getElementById(`${user}-tbody`);
       if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + 1}" class="status">No data.</td></tr>`; return; }
-      tbody.innerHTML = [...rows].reverse().map(r =>
-        `<tr>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}<td><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`
-      ).join("");
+      tbody.innerHTML = [...rows].reverse().map(r => {
+        const isSat = new Date(r.date + "T12:00:00").getDay() === 6;
+        const rowStyle = isSat ? ' style="border-top:2px solid #334155"' : '';
+        return `<tr${rowStyle}>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}<td><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
+      }).join("");
     }
 
     // ── Gist persistence helpers ──────────────────────────────────────────────
