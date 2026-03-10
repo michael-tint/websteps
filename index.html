@@ -21,6 +21,9 @@
 
     h1 { font-size: 1.25rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.5rem; }
 
+    .site-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .header-actions { display: flex; align-items: center; gap: 0.5rem; padding-top: 0.3rem; }
+
     /* tabs */
     .tabs { display: flex; gap: 0.4rem; border-bottom: 1px solid #334155; margin-bottom: 0.6rem; flex-shrink: 0; }
     .tab { padding: 0.35rem 1rem; border-radius: 6px 6px 0 0; border: 1px solid transparent; border-bottom: none; cursor: pointer; font-size: 0.85rem; font-weight: 600; background: none; color: #64748b; }
@@ -169,22 +172,27 @@
   </style>
 </head>
 <body>
-  <h1>WebSteps</h1>
-
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('gym',this)">Gym</button>
-    <button class="tab" onclick="switchTab('dashboard',this)">Steps</button>
-    <button class="tab" onclick="switchTab('weight',this)">Weight</button>
-    <button class="tab" onclick="switchTab('me',this)">Me</button>
-    <button class="tab" onclick="switchTab('mom',this)">Mom</button>
+  <div class="site-header">
+    <div>
+      <h1>WebSteps</h1>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('gym',this)">Gym</button>
+        <button class="tab" onclick="switchTab('dashboard',this)">Steps</button>
+        <button class="tab" onclick="switchTab('weight',this)">Weight</button>
+        <button class="tab" onclick="switchTab('me',this)">Me</button>
+        <button class="tab" onclick="switchTab('mom',this)">Mom</button>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="header-update-status" style="font-size:0.8rem;color:#64748b"></span>
+      <button class="save-btn" id="header-update-btn" onclick="headerUpdate()">Update Fitbit</button>
+    </div>
   </div>
 
   <!-- DASHBOARD -->
   <div id="panel-dashboard" class="panel">
     <div class="controls">
-      <button class="save-btn" onclick="updateFitbitBoth(this, document.getElementById('steps-update-status'))">Update</button>
       <button class="save-btn" onclick="saveStepsView()">Save View</button>
-      <span id="steps-update-status" style="font-size:0.8rem;color:#64748b"></span>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
         <span style="font-size:0.75rem;color:#64748b">From</span>
         <input type="date" id="steps-from" oninput="render()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
@@ -210,9 +218,7 @@
   <!-- GYM -->
   <div id="panel-gym" class="panel active">
     <div class="controls">
-      <button class="save-btn" onclick="updateFitbitBoth(this, document.getElementById('gym-update-status'))">Update</button>
       <button class="save-btn" onclick="saveGymView()">Save View</button>
-      <span id="gym-update-status" style="font-size:0.8rem;color:#64748b"></span>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
         <span style="font-size:0.75rem;color:#64748b">From</span>
         <input type="date" id="gym-from" oninput="renderGym()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
@@ -255,8 +261,6 @@
   <!-- ME -->
   <div id="panel-me" class="panel">
     <div class="controls">
-      <button class="save-btn" id="me-update-btn" onclick="updateFitbitMe()">Update Fitbit</button>
-      <span id="me-update-status" style="font-size:0.8rem;color:#64748b"></span>
       <label>From <input type="date" id="me-start" onchange="renderRaw('me')" /></label>
       <label>To &nbsp;&nbsp;<input type="date" id="me-end" onchange="renderRaw('me')" /></label>
     </div>
@@ -269,8 +273,6 @@
   <!-- MOM -->
   <div id="panel-mom" class="panel">
     <div class="controls">
-      <button class="save-btn" id="mom-update-btn" onclick="updateFitbitMom()">Update Fitbit</button>
-      <span id="mom-update-status" style="font-size:0.8rem;color:#64748b"></span>
       <label>From <input type="date" id="mom-start" onchange="renderRaw('mom')" /></label>
       <label>To &nbsp;&nbsp;<input type="date" id="mom-end" onchange="renderRaw('mom')" /></label>
     </div>
@@ -283,8 +285,6 @@
   <!-- WEIGHT -->
   <div id="panel-weight" class="panel">
     <div class="controls">
-      <button class="save-btn" onclick="updateFitbitBoth(this, document.getElementById('weight-update-status'))">Update</button>
-      <span id="weight-update-status" style="font-size:0.8rem;color:#64748b"></span>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
         <span style="font-size:0.75rem;color:#64748b">From</span>
         <input type="date" id="weight-from" oninput="renderWeight()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
@@ -771,6 +771,16 @@
       } else {
         renderGym();
       }
+    }
+
+    // ── header update button ──────────────────────────────────────────────────
+    function headerUpdate() {
+      const btn = document.getElementById('header-update-btn');
+      const statusEl = document.getElementById('header-update-status');
+      const activeTab = localStorage.getItem('lastTab') || 'gym';
+      if (activeTab === 'me') updateFitbitMe(btn, statusEl);
+      else if (activeTab === 'mom') updateFitbitMom(btn, statusEl);
+      else updateFitbitBoth(btn, statusEl);
     }
 
     // ── tab switching ─────────────────────────────────────────────────────────
