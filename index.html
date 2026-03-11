@@ -1041,7 +1041,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
               else if (lbl[1] !== '') depth = 2; // week
               else if (lbl[2] !== '') depth = 3; // month
             }
-            const x = xScale.getPixelForTick(idx);
+            const x = xScale.getPixelForValue(idx - 0.5);
             ctx.beginPath();
             ctx.moveTo(x, axisTop);
             ctx.lineTo(x, axisTop + rowH * depth);
