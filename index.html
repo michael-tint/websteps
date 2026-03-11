@@ -717,17 +717,33 @@
     // ── init ──────────────────────────────────────────────────────────────────
     async function init() {
       const cacheBust = "?t=" + Date.now();
-      const [meRes, momRes, weightRes, configRes] = await Promise.all([
-        fetch("me.json"          + cacheBust).catch(() => null),
-        fetch("mom.json"         + cacheBust).catch(() => null),
-        fetch("weight_data.json" + cacheBust).catch(() => null),
-        fetch("config.json"      + cacheBust).catch(() => null),
-      ]);
-      const meParsed     = (meRes?.ok)     ? await meRes.json()     : {};
-      const momParsed    = (momRes?.ok)    ? await momRes.json()    : {};
-      const staticWeight = (weightRes?.ok) ? await weightRes.json() : {};
+      const configRes = await fetch("config.json" + cacheBust).catch(() => null);
       appConfig = null;
       if (configRes?.ok) { try { appConfig = await configRes.json(); } catch {} }
+
+      let meParsed, momParsed, staticWeight;
+      const gistId    = appConfig?.gistId;
+      const gistOwner = appConfig?.gistOwner || "michael-tint";
+      if (gistId) {
+        const raw = `https://gist.githubusercontent.com/${gistOwner}/${gistId}/raw`;
+        const [meRes, momRes, weightRes] = await Promise.all([
+          fetch(`${raw}/me.json${cacheBust}`).catch(() => null),
+          fetch(`${raw}/mom.json${cacheBust}`).catch(() => null),
+          fetch(`${raw}/weight_data.json${cacheBust}`).catch(() => null),
+        ]);
+        meParsed     = (meRes?.ok)     ? await meRes.json()     : {};
+        momParsed    = (momRes?.ok)    ? await momRes.json()    : {};
+        staticWeight = (weightRes?.ok) ? await weightRes.json() : {};
+      } else {
+        const [meRes, momRes, weightRes] = await Promise.all([
+          fetch("me.json"          + cacheBust).catch(() => null),
+          fetch("mom.json"         + cacheBust).catch(() => null),
+          fetch("weight_data.json" + cacheBust).catch(() => null),
+        ]);
+        meParsed     = (meRes?.ok)     ? await meRes.json()     : {};
+        momParsed    = (momRes?.ok)    ? await momRes.json()    : {};
+        staticWeight = (weightRes?.ok) ? await weightRes.json() : {};
+      }
       allData = {
         me:  (meParsed.data  || []).filter(r => r.date >= STEPS_FROM),
         mom: (momParsed.data || (Array.isArray(momParsed) ? momParsed : [])).filter(r => r.date >= STEPS_FROM),
@@ -1150,7 +1166,19 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       }
     }
 
-    // ── GitHub Contents API ───────────────────────────────────────────────────
+    // ── Gist data store ───────────────────────────────────────────────────────
+    async function patchGist(files, pat) {
+      const gistId = appConfig?.gistId;
+      if (!gistId) return false;
+      const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+        method: "PATCH",
+        headers: { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" },
+        body: JSON.stringify({ files }),
+      }).catch(() => null);
+      return res?.ok ?? false;
+    }
+
+    // ── GitHub Contents API (config.json only) ────────────────────────────────
     async function writeRepoFile(repo, path, content, message, pat, setStatus) {
       const url     = `https://api.github.com/repos/${repo}/contents/${path}`;
       const headers = { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
@@ -1181,9 +1209,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         await fetch("/delete-me-row", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) }).catch(() => null);
       } else {
         const cfg = await getDecryptedConfig(null);
-        if (!cfg) { alert("Password required to save changes."); return; }
-        const ok = await writeRepoFile(cfg.repo || appConfig?.repo, filename, JSON.stringify({ data: allData[key] }, null, 2), `Delete row ${date} from ${filename}`, cfg.gh_pat);
-        if (!ok) alert("Failed to save to GitHub.");
+        if (!cfg) { alert("No credentials available."); return; }
+        const ok = await patchGist({ [filename]: { content: JSON.stringify({ data: allData[key] }, null, 2) } }, cfg.gh_pat);
+        if (!ok) alert("Failed to save.");
       }
     }
 
@@ -1273,11 +1301,10 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       }
       records.sort((a, b) => a.date < b.date ? -1 : 1);
 
-      // 3. Save updated data + refresh token to GitHub
+      // 3. Save updated data + refresh token
       setStatus("Saving…");
-      const repo   = appConfig?.repo;
-      const dataOk = await writeRepoFile(repo, filename, JSON.stringify({ data: allData[dataKey] }, null, 2), `Update ${filename}`, pat, setStatus);
-      if (!dataOk) { if (btn) btn.disabled = false; return; }
+      const dataOk = await patchGist({ [filename]: { content: JSON.stringify({ data: allData[dataKey] }, null, 2) } }, pat);
+      if (!dataOk) { if (setStatus) setStatus("Save failed", "#f87171"); if (btn) btn.disabled = false; return; }
       await encryptAndSaveConfig(cfg, setStatus);
 
       // 4. Refresh display
@@ -1314,9 +1341,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     // ── weight tab ────────────────────────────────────────────────────────────
     function saveWeightData() {
       localStorage.setItem("weightData", JSON.stringify(weightData));
-      // Fire-and-forget repo save (only if credentials already unlocked this session)
-      if (decryptedConfig && appConfig?.repo) {
-        writeRepoFile(appConfig.repo, "weight_data.json", JSON.stringify(weightData, null, 2), "Update weight_data.json", decryptedConfig.gh_pat).catch(() => null);
+      // Fire-and-forget Gist save (only if credentials already unlocked this session)
+      if (decryptedConfig && appConfig?.gistId) {
+        patchGist({ "weight_data.json": { content: JSON.stringify(weightData, null, 2) } }, decryptedConfig.gh_pat).catch(() => null);
       }
     }
 
