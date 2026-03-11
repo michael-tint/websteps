@@ -457,10 +457,35 @@
       const latestWt   = wtEntries.length ? wtEntries[wtEntries.length-1].weight : null;
       const firstWt    = wtEntries.length ? wtEntries[0].weight : null;
       const cumDelta   = (latestWt != null && firstWt != null) ? latestWt - firstWt : null;
-      const prevWeekWt = [...wtEntries].reverse().find(e => e.date < weekStart)?.weight ?? null;
-      const prevMonWt  = [...wtEntries].reverse().find(e => e.date < monthStart)?.weight ?? null;
-      const lossWeek   = (latestWt != null && prevWeekWt  != null) ? latestWt - prevWeekWt  : null;
-      const lossMon    = (latestWt != null && prevMonWt   != null) ? latestWt - prevMonWt   : null;
+
+      // Week averages keyed by week-start date
+      const weekWtMap = {};
+      for (const e of wtEntries) {
+        const w = gymWeekStart(e.date);
+        (weekWtMap[w] = weekWtMap[w] || []).push(e.weight);
+      }
+      const weekAvgMap = {};
+      for (const [w, ws] of Object.entries(weekWtMap))
+        weekAvgMap[w] = ws.reduce((s,v)=>s+v,0) / ws.length;
+      const sortedWks = Object.keys(weekAvgMap).sort();
+
+      // Loss This Week: avg(current week) - avg(previous week)
+      const thisWkAvg = weekAvgMap[weekStart] ?? null;
+      const prevWkIdx = sortedWks.indexOf(weekStart) - 1;
+      const prevWkAvg = prevWkIdx >= 0 ? weekAvgMap[sortedWks[prevWkIdx]] : null;
+      const lossWeek  = (thisWkAvg != null && prevWkAvg != null) ? thisWkAvg - prevWkAvg : null;
+
+      // Loss This Month: sum of weekly deltas for weeks whose Monday falls in this month
+      const monthYM = monthStart.slice(0,7);
+      const monthWks = sortedWks.filter(w => w.slice(0,7) === monthYM);
+      let lossMon = null;
+      for (const w of monthWks) {
+        const idx = sortedWks.indexOf(w);
+        if (idx > 0) {
+          const delta = weekAvgMap[w] - weekAvgMap[sortedWks[idx-1]];
+          lossMon = (lossMon ?? 0) + delta;
+        }
+      }
 
       function fmtDelta(n) {
         if (n == null) return "—";
