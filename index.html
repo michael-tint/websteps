@@ -1155,13 +1155,22 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     async function writeRepoFile(repo, path, content, message, pat, setStatus) {
       const url     = `https://api.github.com/repos/${repo}/contents/${path}`;
       const headers = { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
-      const getRes  = await fetch(url, { headers }).catch(() => null);
-      const sha     = getRes?.ok ? (await getRes.json()).sha : undefined;
-      const body    = { message, content: toB64(new TextEncoder().encode(content)) };
-      if (sha) body.sha = sha;
-      const putRes  = await fetch(url, { method: "PUT", headers, body: JSON.stringify(body) }).catch(() => null);
-      if (!putRes?.ok && setStatus) setStatus(`Save failed (${putRes?.status})`, "#f87171");
-      return putRes?.ok ?? false;
+      const encoded = toB64(new TextEncoder().encode(content));
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const getRes = await fetch(url, { headers }).catch(() => null);
+        const sha    = getRes?.ok ? (await getRes.json()).sha : undefined;
+        const body   = { message, content: encoded };
+        if (sha) body.sha = sha;
+        const putRes = await fetch(url, { method: "PUT", headers, body: JSON.stringify(body) }).catch(() => null);
+        if (putRes?.ok) return true;
+        if (putRes?.status !== 409) {
+          if (setStatus) setStatus(`Save failed (${putRes?.status})`, "#f87171");
+          return false;
+        }
+        // 409 = SHA mismatch, re-fetch and retry
+      }
+      if (setStatus) setStatus("Save failed (conflict)", "#f87171");
+      return false;
     }
 
     // ── delete me row ─────────────────────────────────────────────────────────
@@ -1267,12 +1276,10 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
       // 3. Save updated data + refresh token to GitHub
       setStatus("Saving…");
-      const repo = appConfig?.repo;
-      const [dataOk] = await Promise.all([
-        writeRepoFile(repo, filename, JSON.stringify({ data: allData[dataKey] }, null, 2), `Update ${filename}`, pat, setStatus),
-        encryptAndSaveConfig(cfg, setStatus),
-      ]);
+      const repo   = appConfig?.repo;
+      const dataOk = await writeRepoFile(repo, filename, JSON.stringify({ data: allData[dataKey] }, null, 2), `Update ${filename}`, pat, setStatus);
       if (!dataOk) { if (btn) btn.disabled = false; return; }
+      await encryptAndSaveConfig(cfg, setStatus);
 
       // 4. Refresh display
       stepsInitialized = false;
