@@ -495,8 +495,9 @@
         if (saved) {
           const s = JSON.parse(saved);
           if (s.v === 2) {
-            s.years.forEach(y => gymExpandedYears.add(y));
-            s.weeks.forEach(w => gymExpandedWeeks.add(w));
+            s.years.forEach(y  => gymExpandedYears.add(y));
+            (s.months||[]).forEach(m => gymExpandedMonths.add(m));
+            s.weeks.forEach(w  => gymExpandedWeeks.add(w));
           } else {
             localStorage.removeItem("gymView"); // discard old format
           }
@@ -707,8 +708,9 @@
     function saveGymView() {
       localStorage.setItem("gymView", JSON.stringify({
         v: 2,
-        years: [...gymExpandedYears],
-        weeks: [...gymExpandedWeeks],
+        years:  [...gymExpandedYears],
+        months: [...gymExpandedMonths],
+        weeks:  [...gymExpandedWeeks],
       }));
       const btn = [...document.querySelectorAll(".save-btn")].find(b => b.textContent.trim() === "Save View");
       if (btn) { btn.textContent = "Saved ✓"; setTimeout(() => btn.textContent = "Save View", 1500); }
@@ -753,11 +755,7 @@
         me:  (meParsed.data  || []).filter(r => r.date >= STEPS_FROM),
         mom: (momParsed.data || (Array.isArray(momParsed) ? momParsed : [])).filter(r => r.date >= STEPS_FROM),
       };
-      const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
-      // deep merge per date: local fields override static, but unset fields keep static values
-      weightData = {};
-      for (const k of new Set([...Object.keys(staticWeight), ...Object.keys(localWeight)]))
-        weightData[k] = { ...(staticWeight[k]||{}), ...(localWeight[k]||{}) };
+      weightData = staticWeight || {};
 
       // Global max for fixed Y axis
       for (const r of [...(allData.me||[]), ...(allData.mom||[])].filter(r => r.date >= STEPS_FROM))
@@ -1351,11 +1349,10 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
-    function saveWeightData() {
-      localStorage.setItem("weightData", JSON.stringify(weightData));
-      // Fire-and-forget Gist save (only if credentials already unlocked this session)
-      if (decryptedConfig && appConfig?.gistId) {
-        patchGist({ "weight_data.json": { content: JSON.stringify(weightData, null, 2) } }, decryptedConfig.gh_pat).catch(() => null);
+    async function saveWeightData() {
+      const cfg = decryptedConfig || await getDecryptedConfig(null);
+      if (cfg && appConfig?.gistId) {
+        patchGist({ "weight_data.json": { content: JSON.stringify(weightData, null, 2) } }, cfg.gh_pat).catch(() => null);
       }
     }
 
