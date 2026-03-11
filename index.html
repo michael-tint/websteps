@@ -1138,8 +1138,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         if (setStatus) setStatus("No config.json found. Run setup.html first.", "#f87171");
         return null;
       }
-      const password = prompt("Enter password to update Fitbit data:");
-      if (!password) return null;
+      const password = "websteps123";
       try {
         const data = await decryptAppConfig(appConfig.encryptedBlob, appConfig.salt, appConfig.iv, password);
         sessionPassword = password;
