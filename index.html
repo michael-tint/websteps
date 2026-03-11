@@ -359,7 +359,8 @@
     function gymWeekStart(dateStr) {
       const [y,m,d] = dateStr.split("-").map(Number);
       const dt = new Date(y, m-1, d);
-      dt.setDate(dt.getDate() - dt.getDay()); // back to Sunday
+      const _dow = dt.getDay(); // 0=Sun
+      dt.setDate(dt.getDate() - (_dow === 0 ? 6 : _dow - 1)); // back to Monday
       return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
     }
 
