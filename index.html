@@ -496,8 +496,8 @@
       document.getElementById("gym-cards").innerHTML = `
         <div class="card"><div class="card-label">Latest Weight</div><div class="card-value blue">${latestWt != null ? fmt(latestWt,1) : "—"}</div></div>
         <div class="card"><div class="card-label">Weight Delta</div><div class="card-value ${deltaClass(cumDelta)}">${fmtDelta(cumDelta)}</div></div>
-        <div class="card"><div class="card-label">Loss This Week</div><div class="card-value ${deltaClass(lossWeek)}">${fmtDelta(lossWeek)}</div></div>
-        <div class="card"><div class="card-label">Loss This Month</div><div class="card-value ${deltaClass(lossMon)}">${fmtDelta(lossMon)}</div></div>
+        <div class="card"><div class="card-label">Δ Week</div><div class="card-value ${deltaClass(lossWeek)}">${fmtDelta(lossWeek)}</div></div>
+        <div class="card"><div class="card-label">Δ Month</div><div class="card-value ${deltaClass(lossMon)}">${fmtDelta(lossMon)}</div></div>
       `;
 
       // Build year > month > week > day tree
