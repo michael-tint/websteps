@@ -6259,26 +6259,6 @@
       "fairlyActiveMinutes": 21,
       "veryActiveMinutes": 68,
       "restingHeartRate": 84
-    },
-    {
-      "date": "2026-03-10",
-      "week": "2026-03-08",
-      "steps": 21098,
-      "caloriesOut": 3369,
-      "caloriesBMR": 1644,
-      "activityCalories": 1967,
-      "floors": 135,
-      "elevation": 1350,
-      "sedentaryMinutes": 1087,
-      "lightlyActiveMinutes": 170,
-      "fairlyActiveMinutes": 79,
-      "veryActiveMinutes": 104,
-      "restingHeartRate": 82,
-      "weight": 165.8
-    },
-    {
-      "date": "2026-03-11",
-      "week": "2026-03-08"
     }
   ]
 }
