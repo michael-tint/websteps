@@ -1,9 +1,4 @@
 {
-  "creds": {
-    "client_id": "23TY76",
-    "client_secret": "e9767cc9382125f9456d523554224bdc",
-    "refresh_token": "475bcf2cdbbd3611653c163b037d45d22da19c99be161119009198bf2f32ee14"
-  },
   "data": [
     {
       "date": "2025-01-01",

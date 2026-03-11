@@ -316,6 +316,9 @@
     let weightData = {};
     let meCreds  = null;
     let momCreds = null;
+    let appConfig       = null; // parsed config.json
+    let decryptedConfig = null; // in-memory only, cleared on page reload
+    let sessionPassword = null; // in-memory only, for re-encrypting config after token refresh
     const STEPS_FROM = "2025-01-01";
     let stepsChart = null;
     let globalMaxSteps = 0;
@@ -714,33 +717,20 @@
     // ── init ──────────────────────────────────────────────────────────────────
     async function init() {
       const cacheBust = "?t=" + Date.now();
-      const storedPat = localStorage.getItem("gh_pat");
-      const gistData  = storedPat ? await readFromGist(storedPat) : null;
-      let meParsed, momParsed;
-      if (gistData) {
-        meParsed  = gistData.me  || {};
-        momParsed = gistData.mom || {};
-      } else {
-        const [meRes, momRes] = await Promise.all([
-          fetch("me.json"  + cacheBust).catch(() => null),
-          fetch("mom.json" + cacheBust).catch(() => null),
-        ]);
-        meParsed  = (meRes  && meRes.ok)  ? await meRes.json()  : {};
-        momParsed = (momRes && momRes.ok) ? await momRes.json() : {};
-      }
-      meCreds  = meParsed.creds  || null;
-      momCreds = momParsed.creds || null;
+      const [meRes, momRes, weightRes, configRes] = await Promise.all([
+        fetch("me.json"          + cacheBust).catch(() => null),
+        fetch("mom.json"         + cacheBust).catch(() => null),
+        fetch("weight_data.json" + cacheBust).catch(() => null),
+        fetch("config.json"      + cacheBust).catch(() => null),
+      ]);
+      const meParsed     = (meRes?.ok)     ? await meRes.json()     : {};
+      const momParsed    = (momRes?.ok)    ? await momRes.json()    : {};
+      const staticWeight = (weightRes?.ok) ? await weightRes.json() : {};
+      appConfig = configRes?.ok ? await configRes.json() : null;
       allData = {
         me:  (meParsed.data  || []).filter(r => r.date >= STEPS_FROM),
         mom: (momParsed.data || (Array.isArray(momParsed) ? momParsed : [])).filter(r => r.date >= STEPS_FROM),
       };
-      let staticWeight;
-      if (gistData) {
-        staticWeight = gistData.weightData || {};
-      } else {
-        const weightRes = await fetch("weight_data.json" + cacheBust).catch(() => null);
-        staticWeight = (weightRes && weightRes.ok) ? await weightRes.json() : {};
-      }
       const localWeight  = JSON.parse(localStorage.getItem("weightData") || "{}");
       // deep merge per date: local fields override static, but unset fields keep static values
       weightData = {};
@@ -1111,91 +1101,85 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       }).join("");
     }
 
-    // ── Gist persistence helpers ──────────────────────────────────────────────
-    function getGhPat() {
-      let pat = localStorage.getItem("gh_pat");
-      if (!pat) {
-        pat = prompt("Enter a GitHub Personal Access Token with 'repo' and 'gist' scopes.\nIt will be saved locally for future use.");
-        if (pat) localStorage.setItem("gh_pat", pat.trim());
-      }
-      return pat || null;
+    // ── crypto helpers ────────────────────────────────────────────────────────
+    async function deriveKey(password, salt) {
+      const enc = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
+      return crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+        keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+      );
     }
 
-    function gistHeaders(pat) {
-      return { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
+    function fromB64(b64) { return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+    function toB64(buf)   { let s = ""; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s); }
+
+    async function decryptAppConfig(encryptedBlob, saltB64, ivB64, password) {
+      const key       = await deriveKey(password, fromB64(saltB64));
+      const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64(ivB64) }, key, fromB64(encryptedBlob));
+      return JSON.parse(new TextDecoder().decode(decrypted));
     }
 
-    async function readFromGist(pat) {
-      const gistId = localStorage.getItem("websteps_gist_id");
-      if (!gistId) return null;
-      const res = await fetch(`https://api.github.com/gists/${gistId}`, { headers: gistHeaders(pat) }).catch(() => null);
-      if (!res?.ok) return null;
-      const gist = await res.json();
-      return {
-        me:         JSON.parse(gist.files["me.json"]?.content          || "{}"),
-        mom:        JSON.parse(gist.files["mom.json"]?.content         || "{}"),
-        weightData: JSON.parse(gist.files["weight_data.json"]?.content || "{}"),
-      };
+    async function encryptAndSaveConfig(data, setStatus) {
+      if (!sessionPassword || !appConfig) return;
+      const salt      = crypto.getRandomValues(new Uint8Array(16));
+      const iv        = crypto.getRandomValues(new Uint8Array(12));
+      const key       = await deriveKey(sessionPassword, salt);
+      const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(data)));
+      const newConfig = { ...appConfig, encryptedBlob: toB64(encrypted), salt: toB64(salt), iv: toB64(iv) };
+      appConfig = newConfig;
+      await writeRepoFile(appConfig.repo, "config.json", JSON.stringify(newConfig, null, 2), "Update config.json (token refresh)", data.gh_pat, setStatus);
     }
 
-    async function getOrCreateGist(pat) {
-      let gistId = localStorage.getItem("websteps_gist_id");
-      if (gistId) return gistId;
-      const res = await fetch("https://api.github.com/gists", {
-        method: "POST", headers: gistHeaders(pat),
-        body: JSON.stringify({
-          description: "websteps data", public: false,
-          files: {
-            "me.json":          { content: JSON.stringify({ creds: meCreds,  data: allData.me  || [] }, null, 2) },
-            "mom.json":         { content: JSON.stringify({ creds: momCreds, data: allData.mom || [] }, null, 2) },
-            "weight_data.json": { content: JSON.stringify(weightData, null, 2) },
-          }
-        })
-      }).catch(() => null);
-      if (!res?.ok) {
-        if (res?.status === 401 || res?.status === 403) localStorage.removeItem("gh_pat");
+    async function getDecryptedConfig(setStatus) {
+      if (decryptedConfig) return decryptedConfig;
+      if (!appConfig) {
+        if (setStatus) setStatus("No config.json found. Run setup.html first.", "#f87171");
         return null;
       }
-      gistId = (await res.json()).id;
-      localStorage.setItem("websteps_gist_id", gistId);
-      alert(`Gist created! Add this as a GitHub Actions secret named GIST_ID:\n\n${gistId}\n\nAlso add your PAT as GH_PAT secret so the daily sync uses the Gist too.`);
-      return gistId;
+      const password = prompt("Enter password to update Fitbit data:");
+      if (!password) return null;
+      try {
+        const data = await decryptAppConfig(appConfig.encryptedBlob, appConfig.salt, appConfig.iv, password);
+        sessionPassword = password;
+        decryptedConfig = data;
+        return data;
+      } catch {
+        if (setStatus) setStatus("Wrong password.", "#f87171");
+        return null;
+      }
     }
 
-    async function saveToGist(filename, creds, data, setStatus) {
-      const pat = getGhPat();
-      if (!pat) return false;
-      const gistId = await getOrCreateGist(pat);
-      if (!gistId) { if (setStatus) setStatus("Failed to create Gist — does your PAT have 'gist' scope?", "#f87171"); return false; }
-      if (setStatus) setStatus("Saving…");
-      const res = await fetch(`https://api.github.com/gists/${gistId}`, {
-        method: "PATCH", headers: gistHeaders(pat),
-        body: JSON.stringify({ files: { [filename]: { content: JSON.stringify({ creds, data }, null, 2) } } })
-      }).catch(() => null);
-      if (!res?.ok) {
-        if (res?.status === 401) localStorage.removeItem("gh_pat");
-        if (setStatus) setStatus(`Save failed (${res?.status})`, "#f87171");
-        return false;
-      }
-      return true;
+    // ── GitHub Contents API ───────────────────────────────────────────────────
+    async function writeRepoFile(repo, path, content, message, pat, setStatus) {
+      const url     = `https://api.github.com/repos/${repo}/contents/${path}`;
+      const headers = { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
+      const getRes  = await fetch(url, { headers }).catch(() => null);
+      const sha     = getRes?.ok ? (await getRes.json()).sha : undefined;
+      const body    = { message, content: toB64(new TextEncoder().encode(content)) };
+      if (sha) body.sha = sha;
+      const putRes  = await fetch(url, { method: "PUT", headers, body: JSON.stringify(body) }).catch(() => null);
+      if (!putRes?.ok && setStatus) setStatus(`Save failed (${putRes?.status})`, "#f87171");
+      return putRes?.ok ?? false;
     }
 
     // ── delete me row ─────────────────────────────────────────────────────────
     async function deleteRow(date, key) {
       const filename = key + ".json";
-      const creds    = key === "mom" ? momCreds : meCreds;
       allData[key] = allData[key].filter(r => r.date !== date);
       renderRaw(key);
       if (location.hostname === "localhost") {
         await fetch("/delete-me-row", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) }).catch(() => null);
       } else {
-        const ok = await saveToGist(filename, creds, allData[key]);
-        if (!ok) alert("Failed to save to Gist.");
+        const cfg = await getDecryptedConfig(null);
+        if (!cfg) { alert("Password required to save changes."); return; }
+        const ok = await writeRepoFile(cfg.repo || appConfig?.repo, filename, JSON.stringify({ data: allData[key] }, null, 2), `Delete row ${date} from ${filename}`, cfg.gh_pat);
+        if (!ok) alert("Failed to save to GitHub.");
       }
     }
 
     // ── Fitbit update ─────────────────────────────────────────────────────────
-    async function updateFitbit(btn, statusEl, filename, creds, dataKey, defaultBtnId, defaultStatusId) {
+    async function updateFitbit(btn, statusEl, filename, dataKey, defaultBtnId, defaultStatusId) {
       btn      = btn      || (defaultBtnId  ? document.getElementById(defaultBtnId)  : null);
       statusEl = statusEl || (defaultStatusId ? document.getElementById(defaultStatusId) : null);
       const setStatus = (msg, color) => { if (!statusEl) return; statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
@@ -1225,15 +1209,11 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       }
 
       // ── production: direct Fitbit API + save to GitHub ───────────────────
-      if (!creds) { setStatus("No credentials found in " + filename, "#f87171"); if (btn) btn.disabled = false; return; }
-      const pat = getGhPat();
-      if (!pat) { if (btn) btn.disabled = false; return; }
-
-      // Re-fetch latest token from Gist (always current, no CDN cache issues)
-      setStatus("Fetching latest token…");
-      const gistLatest = await readFromGist(pat);
-      if (gistLatest?.[dataKey]?.creds?.refresh_token)
-        creds.refresh_token = gistLatest[dataKey].creds.refresh_token;
+      const cfg = await getDecryptedConfig(setStatus);
+      if (!cfg) { if (btn) btn.disabled = false; return; }
+      const pat   = cfg.gh_pat;
+      const creds = dataKey === "me" ? cfg.meCreds : cfg.momCreds;
+      if (!creds?.client_id) { setStatus("No Fitbit credentials in config for " + dataKey, "#f87171"); if (btn) btn.disabled = false; return; }
       const fitbitAuth = btoa(`${creds.client_id}:${creds.client_secret}`);
 
       // 1. Refresh Fitbit token
@@ -1284,9 +1264,14 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       }
       records.sort((a, b) => a.date < b.date ? -1 : 1);
 
-      // 3. Save to Gist
-      const ok = await saveToGist(filename, creds, allData[dataKey], setStatus);
-      if (!ok) { if (btn) btn.disabled = false; return; }
+      // 3. Save updated data + refresh token to GitHub
+      setStatus("Saving…");
+      const repo = appConfig?.repo;
+      const [dataOk] = await Promise.all([
+        writeRepoFile(repo, filename, JSON.stringify({ data: allData[dataKey] }, null, 2), `Update ${filename}`, pat, setStatus),
+        encryptAndSaveConfig(cfg, setStatus),
+      ]);
+      if (!dataOk) { if (btn) btn.disabled = false; return; }
 
       // 4. Refresh display
       stepsInitialized = false;
@@ -1304,18 +1289,18 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     async function updateFitbitMe(btn, statusEl) {
-      const ok = await updateFitbit(btn, statusEl, "me.json", meCreds, "me", "me-update-btn", "me-update-status");
+      const ok = await updateFitbit(btn, statusEl, "me.json", "me", "me-update-btn", "me-update-status");
       if (ok) { const s = statusEl || document.getElementById("me-update-status"); if (s) s.textContent = "Done! Reloading…"; setTimeout(() => location.reload(), 1000); }
     }
     async function updateFitbitMom(btn, statusEl) {
-      const ok = await updateFitbit(btn, statusEl, "mom.json", momCreds, "mom", "mom-update-btn", "mom-update-status");
+      const ok = await updateFitbit(btn, statusEl, "mom.json", "mom", "mom-update-btn", "mom-update-status");
       if (ok) { const s = statusEl || document.getElementById("mom-update-status"); if (s) s.textContent = "Done! Reloading…"; setTimeout(() => location.reload(), 1000); }
     }
     async function updateFitbitBoth(btn, statusEl) {
       if (btn) btn.disabled = true;
       const noBtn = { disabled: false };
-      await updateFitbit(noBtn, statusEl, "me.json",  meCreds,  "me",  null, null);
-      await updateFitbit(noBtn, statusEl, "mom.json", momCreds, "mom", null, null);
+      await updateFitbit(noBtn, statusEl, "me.json",  "me",  null, null);
+      await updateFitbit(noBtn, statusEl, "mom.json", "mom", null, null);
       const setStatus = (msg, color) => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; } };
       setStatus("Done! Reloading…", "#4ade80");
       setTimeout(() => location.reload(), 1000);
@@ -1324,14 +1309,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     // ── weight tab ────────────────────────────────────────────────────────────
     function saveWeightData() {
       localStorage.setItem("weightData", JSON.stringify(weightData));
-      // Fire-and-forget Gist save
-      const pat    = localStorage.getItem("gh_pat");
-      const gistId = localStorage.getItem("websteps_gist_id");
-      if (pat && gistId) {
-        fetch(`https://api.github.com/gists/${gistId}`, {
-          method: "PATCH", headers: gistHeaders(pat),
-          body: JSON.stringify({ files: { "weight_data.json": { content: JSON.stringify(weightData, null, 2) } } }),
-        }).catch(() => null);
+      // Fire-and-forget repo save (only if credentials already unlocked this session)
+      if (decryptedConfig && appConfig?.repo) {
+        writeRepoFile(appConfig.repo, "weight_data.json", JSON.stringify(weightData, null, 2), "Update weight_data.json", decryptedConfig.gh_pat).catch(() => null);
       }
     }
 
