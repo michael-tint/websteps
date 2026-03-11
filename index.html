@@ -726,7 +726,8 @@
       const meParsed     = (meRes?.ok)     ? await meRes.json()     : {};
       const momParsed    = (momRes?.ok)    ? await momRes.json()    : {};
       const staticWeight = (weightRes?.ok) ? await weightRes.json() : {};
-      appConfig = configRes?.ok ? await configRes.json() : null;
+      appConfig = null;
+      if (configRes?.ok) { try { appConfig = await configRes.json(); } catch {} }
       allData = {
         me:  (meParsed.data  || []).filter(r => r.date >= STEPS_FROM),
         mom: (momParsed.data || (Array.isArray(momParsed) ? momParsed : [])).filter(r => r.date >= STEPS_FROM),
