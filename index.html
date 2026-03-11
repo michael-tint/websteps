@@ -1225,7 +1225,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     // ── Fitbit update ─────────────────────────────────────────────────────────
-    async function updateFitbit(btn, statusEl, filename, dataKey, defaultBtnId, defaultStatusId) {
+    async function updateFitbit(btn, statusEl, filename, dataKey, defaultBtnId, defaultStatusId, skipReload = false) {
       btn      = btn      || (defaultBtnId  ? document.getElementById(defaultBtnId)  : null);
       statusEl = statusEl || (defaultStatusId ? document.getElementById(defaultStatusId) : null);
       const setStatus = (msg, color) => { if (!statusEl) return; statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
@@ -1328,7 +1328,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       render();
       setStatus("Done! Reloading…", "#4ade80");
       if (btn) btn.disabled = false;
-      setTimeout(() => location.reload(), 1200);
+      if (!skipReload) setTimeout(() => location.reload(), 1200);
       return true;
     }
 
@@ -1341,11 +1341,13 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     async function updateFitbitBoth(btn, statusEl) {
       if (btn) btn.disabled = true;
       const noBtn = { disabled: false };
-      await updateFitbit(noBtn, statusEl, "me.json",  "me",  null, null);
-      await updateFitbit(noBtn, statusEl, "mom.json", "mom", null, null);
+      const skipReload = true;
+      await updateFitbit(noBtn, statusEl, "me.json",  "me",  null, null, skipReload);
+      await updateFitbit(noBtn, statusEl, "mom.json", "mom", null, null, skipReload);
       if (btn) btn.disabled = false;
       const setStatus = (msg, color) => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; } };
-      setStatus("Done!", "#4ade80");
+      setStatus("Done! Reloading…", "#4ade80");
+      setTimeout(() => location.reload(), 1200);
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
