@@ -1007,19 +1007,54 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const leaves = items.filter(i => !i.open);
 
       // Always 4-row labels so x-axis height never shifts on expand/collapse
+      // Row order (top→bottom): day, week, month, year
       const labels = leaves.map(i =>
-        i.type === 'week' ? ['', i.label, '', ''] :
-        i.type === 'day'  ? ['', '', i.label, ''] :
-        [i.label, '', '', '']
+        i.type === 'day'   ? [i.label, '', '', ''] :
+        i.type === 'week'  ? ['', i.label, '', ''] :
+        i.type === 'month' ? ['', '', i.label, ''] :
+        ['', '', '', i.label]
       );
       const me    = leaves.map(i => i.me);
       const mom   = leaves.map(i => i.mom);
       const meRef = leaves.map(i => computeRef('me',  i));
       const momRef= leaves.map(i => computeRef('mom', i));
 
+      // Plugin: draw variable-depth tick marks (day=1 row, week=2, month=3, year=4)
+      const stepsTickPlugin = {
+        id: 'stepsTicks',
+        afterDraw(chart) {
+          const xScale = chart.scales.x;
+          if (!xScale) return;
+          const lbs = chart.data.labels;
+          if (!lbs || !lbs.length) return;
+          const axisTop  = chart.chartArea.bottom;
+          const axisBot  = xScale.bottom;
+          const rowH     = (axisBot - axisTop) / 4;
+          const ctx      = chart.ctx;
+          ctx.save();
+          ctx.strokeStyle = '#475569';
+          ctx.lineWidth   = 1;
+          lbs.forEach((lbl, idx) => {
+            let depth = 4; // year default
+            if (Array.isArray(lbl)) {
+              if      (lbl[0] !== '') depth = 1; // day
+              else if (lbl[1] !== '') depth = 2; // week
+              else if (lbl[2] !== '') depth = 3; // month
+            }
+            const x = xScale.getPixelForTick(idx);
+            ctx.beginPath();
+            ctx.moveTo(x, axisTop);
+            ctx.lineTo(x, axisTop + rowH * depth);
+            ctx.stroke();
+          });
+          ctx.restore();
+        }
+      };
+
       if (stepsChart) stepsChart.destroy();
       stepsChart = new Chart(document.getElementById("stepsChart"), {
         type: "bar",
+        plugins: [stepsTickPlugin],
         data: {
           labels,
           datasets: [
@@ -1062,7 +1097,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
             },
           },
           scales: {
-            x: { ticks:{ color:"#64748b", maxRotation:45 }, grid:{ color:"#1e293b" } },
+            x: { ticks:{ color:"#64748b", maxRotation:45 }, grid:{ color:"#1e293b", drawTicks:false } },
             y: {
               beginAtZero: true,
               max: 20000,
