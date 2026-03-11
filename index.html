@@ -1290,21 +1290,19 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     async function updateFitbitMe(btn, statusEl) {
-      const ok = await updateFitbit(btn, statusEl, "me.json", "me", "me-update-btn", "me-update-status");
-      if (ok) { const s = statusEl || document.getElementById("me-update-status"); if (s) s.textContent = "Done! Reloading…"; setTimeout(() => location.reload(), 1000); }
+      await updateFitbit(btn, statusEl, "me.json", "me", "me-update-btn", "me-update-status");
     }
     async function updateFitbitMom(btn, statusEl) {
-      const ok = await updateFitbit(btn, statusEl, "mom.json", "mom", "mom-update-btn", "mom-update-status");
-      if (ok) { const s = statusEl || document.getElementById("mom-update-status"); if (s) s.textContent = "Done! Reloading…"; setTimeout(() => location.reload(), 1000); }
+      await updateFitbit(btn, statusEl, "mom.json", "mom", "mom-update-btn", "mom-update-status");
     }
     async function updateFitbitBoth(btn, statusEl) {
       if (btn) btn.disabled = true;
       const noBtn = { disabled: false };
       await updateFitbit(noBtn, statusEl, "me.json",  "me",  null, null);
       await updateFitbit(noBtn, statusEl, "mom.json", "mom", null, null);
+      if (btn) btn.disabled = false;
       const setStatus = (msg, color) => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; } };
-      setStatus("Done! Reloading…", "#4ade80");
-      setTimeout(() => location.reload(), 1000);
+      setStatus("Done!", "#4ade80");
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
