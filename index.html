@@ -1206,6 +1206,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     // ── delete me row ─────────────────────────────────────────────────────────
+    const _saveTimers = {};
     async function deleteRow(date, key) {
       const filename = key + ".json";
       allData[key] = allData[key].filter(r => r.date !== date);
@@ -1213,10 +1214,13 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (location.hostname === "localhost") {
         await fetch("/delete-me-row", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) }).catch(() => null);
       } else {
-        const cfg = await getDecryptedConfig(null);
-        if (!cfg) { alert("No credentials available."); return; }
-        const ok = await patchGist({ [filename]: { content: JSON.stringify({ data: allData[key] }, null, 2) } }, cfg.gh_pat);
-        if (!ok) alert("Failed to save.");
+        clearTimeout(_saveTimers[key]);
+        _saveTimers[key] = setTimeout(async () => {
+          const cfg = await getDecryptedConfig(null);
+          if (!cfg) { alert("No credentials available."); return; }
+          const ok = await patchGist({ [filename]: { content: JSON.stringify({ data: allData[key] }, null, 2) } }, cfg.gh_pat);
+          if (!ok) alert("Failed to save.");
+        }, 600);
       }
     }
 
