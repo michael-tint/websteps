@@ -721,29 +721,21 @@
       appConfig = null;
       if (configRes?.ok) { try { appConfig = await configRes.json(); } catch {} }
 
+      let meParsed, momParsed, staticWeight;
       // Prefer Gist's config.json for latest rotated tokens
       const gistId    = appConfig?.gistId;
       const gistOwner = appConfig?.gistOwner || "michael-tint";
       if (gistId) {
-        const gistConfigRes = await fetch(
-          `https://gist.githubusercontent.com/${gistOwner}/${gistId}/raw/config.json${cacheBust}`
-        ).catch(() => null);
-        if (gistConfigRes?.ok) {
-          try {
-            const gistConfig = await gistConfigRes.json();
-            appConfig = { ...appConfig, ...gistConfig };
-          } catch {}
-        }
-      }
-
-      let meParsed, momParsed, staticWeight;
-      if (gistId) {
         const raw = `https://gist.githubusercontent.com/${gistOwner}/${gistId}/raw`;
-        const [meRes, momRes, weightRes] = await Promise.all([
+        const [gistConfigRes, meRes, momRes, weightRes] = await Promise.all([
+          fetch(`${raw}/config.json${cacheBust}`).catch(() => null),
           fetch(`${raw}/me.json${cacheBust}`).catch(() => null),
           fetch(`${raw}/mom.json${cacheBust}`).catch(() => null),
           fetch(`${raw}/weight_data.json${cacheBust}`).catch(() => null),
         ]);
+        if (gistConfigRes?.ok) {
+          try { appConfig = { ...appConfig, ...await gistConfigRes.json() }; } catch {}
+        }
         meParsed     = (meRes?.ok)     ? await meRes.json()     : {};
         momParsed    = (momRes?.ok)    ? await momRes.json()    : {};
         staticWeight = (weightRes?.ok) ? await weightRes.json() : {};
