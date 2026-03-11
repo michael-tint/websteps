@@ -5806,7 +5806,8 @@
       "veryActiveMinutes": 49,
       "activityCalories": 1865,
       "restingHeartRate": 84,
-      "weight": 163.3
+      "weight": 163.3,
+      "week": "2026-02-08"
     },
     {
       "date": "2026-02-10",
@@ -5821,7 +5822,8 @@
       "veryActiveMinutes": 96,
       "activityCalories": 1859,
       "restingHeartRate": 86,
-      "weight": 166.1
+      "weight": 166.1,
+      "week": "2026-02-08"
     },
     {
       "date": "2026-02-11",
@@ -5836,7 +5838,8 @@
       "veryActiveMinutes": 76,
       "activityCalories": 1277,
       "restingHeartRate": 86,
-      "weight": 166.4
+      "weight": 166.4,
+      "week": "2026-02-08"
     },
     {
       "date": "2026-02-12",
@@ -5879,7 +5882,8 @@
       "veryActiveMinutes": 32,
       "activityCalories": 1122,
       "restingHeartRate": 81,
-      "weight": 167.5
+      "weight": 167.5,
+      "week": "2026-02-08"
     },
     {
       "date": "2026-02-15",
@@ -5894,7 +5898,8 @@
       "veryActiveMinutes": 50,
       "activityCalories": 882,
       "restingHeartRate": 83,
-      "weight": 167.4
+      "weight": 167.4,
+      "week": "2026-02-15"
     },
     {
       "date": "2026-02-16",
@@ -5909,7 +5914,8 @@
       "veryActiveMinutes": 52,
       "activityCalories": 1075,
       "restingHeartRate": 82,
-      "weight": 166.4
+      "weight": 166.4,
+      "week": "2026-02-15"
     },
     {
       "date": "2026-02-17",
@@ -5924,7 +5930,8 @@
       "veryActiveMinutes": 65,
       "activityCalories": 1402,
       "restingHeartRate": 81,
-      "weight": 166.3
+      "weight": 166.3,
+      "week": "2026-02-15"
     },
     {
       "date": "2026-02-18",
@@ -5939,7 +5946,8 @@
       "veryActiveMinutes": 50,
       "activityCalories": 1472,
       "restingHeartRate": 83,
-      "weight": 165.7
+      "weight": 165.7,
+      "week": "2026-02-15"
     },
     {
       "date": "2026-02-19",
@@ -5954,7 +5962,8 @@
       "veryActiveMinutes": 63,
       "activityCalories": 1359,
       "restingHeartRate": 84,
-      "weight": 167.6
+      "weight": 167.6,
+      "week": "2026-02-15"
     },
     {
       "date": "2026-02-20",
@@ -5969,7 +5978,8 @@
       "veryActiveMinutes": 70,
       "activityCalories": 1609,
       "restingHeartRate": 84,
-      "weight": 166.1
+      "weight": 166.1,
+      "week": "2026-02-15"
     },
     {
       "date": "2026-02-21",
@@ -5984,7 +5994,8 @@
       "veryActiveMinutes": 41,
       "activityCalories": 1171,
       "restingHeartRate": 84,
-      "weight": 166.1
+      "weight": 166.1,
+      "week": "2026-02-15"
     },
     {
       "date": "2026-02-22",
@@ -5999,7 +6010,8 @@
       "veryActiveMinutes": 13,
       "activityCalories": 558,
       "restingHeartRate": 85,
-      "weight": 166.1
+      "weight": 166.1,
+      "week": "2026-02-22"
     },
     {
       "date": "2026-02-23",
@@ -6014,7 +6026,8 @@
       "veryActiveMinutes": 48,
       "activityCalories": 1355,
       "restingHeartRate": 84,
-      "weight": 164.9
+      "weight": 164.9,
+      "week": "2026-02-22"
     },
     {
       "date": "2026-02-24",
@@ -6029,7 +6042,8 @@
       "veryActiveMinutes": 73,
       "activityCalories": 1378,
       "restingHeartRate": 84,
-      "weight": 166.6
+      "weight": 166.6,
+      "week": "2026-02-22"
     },
     {
       "date": "2026-02-25",
@@ -6044,7 +6058,8 @@
       "veryActiveMinutes": 76,
       "activityCalories": 1366,
       "restingHeartRate": 85,
-      "weight": 167.3
+      "weight": 167.3,
+      "week": "2026-02-22"
     },
     {
       "date": "2026-02-26",
@@ -6061,7 +6076,8 @@
       "restingHeartRate": 84,
       "weight": 164.9,
       "activeScore": -1,
-      "marginalCalories": 556
+      "marginalCalories": 556,
+      "week": "2026-02-22"
     },
     {
       "date": "2026-02-27",
@@ -6078,7 +6094,8 @@
       "restingHeartRate": 83,
       "weight": 164.4,
       "activeScore": -1,
-      "marginalCalories": 962
+      "marginalCalories": 962,
+      "week": "2026-02-22"
     },
     {
       "date": "2026-02-28",
@@ -6095,7 +6112,8 @@
       "restingHeartRate": 81,
       "weight": 165.5,
       "activeScore": -1,
-      "marginalCalories": 751
+      "marginalCalories": 751,
+      "week": "2026-02-22"
     },
     {
       "date": "2026-03-01",
@@ -6112,7 +6130,8 @@
       "veryActiveMinutes": 76,
       "marginalCalories": 914,
       "restingHeartRate": 82,
-      "weight": 165.6
+      "weight": 165.6,
+      "week": "2026-03-01"
     },
     {
       "date": "2026-03-02",
@@ -6128,7 +6147,138 @@
       "fairlyActiveMinutes": 10,
       "veryActiveMinutes": 20,
       "marginalCalories": 461,
-      "restingHeartRate": 81
+      "restingHeartRate": 81,
+      "week": "2026-03-01"
+    },
+    {
+      "date": "2026-03-03",
+      "week": "2026-03-01",
+      "steps": 12969,
+      "caloriesOut": 2972,
+      "caloriesBMR": 1637,
+      "activityCalories": 1478,
+      "floors": 70,
+      "elevation": 700,
+      "sedentaryMinutes": 1191,
+      "lightlyActiveMinutes": 113,
+      "fairlyActiveMinutes": 82,
+      "veryActiveMinutes": 54,
+      "restingHeartRate": 79,
+      "weight": 164.4
+    },
+    {
+      "date": "2026-03-04",
+      "week": "2026-03-01",
+      "steps": 7445,
+      "caloriesOut": 2691,
+      "caloriesBMR": 1639,
+      "activityCalories": 1075,
+      "floors": 26,
+      "elevation": 260,
+      "sedentaryMinutes": 1218,
+      "lightlyActiveMinutes": 161,
+      "fairlyActiveMinutes": 12,
+      "veryActiveMinutes": 49,
+      "restingHeartRate": 80,
+      "weight": 164.7
+    },
+    {
+      "date": "2026-03-05",
+      "week": "2026-03-01",
+      "steps": 11456,
+      "caloriesOut": 2891,
+      "caloriesBMR": 1635,
+      "activityCalories": 1395,
+      "floors": 24,
+      "elevation": 240,
+      "sedentaryMinutes": 1184,
+      "lightlyActiveMinutes": 160,
+      "fairlyActiveMinutes": 31,
+      "veryActiveMinutes": 65,
+      "restingHeartRate": 81,
+      "weight": 164
+    },
+    {
+      "date": "2026-03-06",
+      "week": "2026-03-01",
+      "steps": 12151,
+      "caloriesOut": 2725,
+      "caloriesBMR": 1643,
+      "activityCalories": 1219,
+      "floors": 21,
+      "elevation": 210,
+      "sedentaryMinutes": 1171,
+      "lightlyActiveMinutes": 189,
+      "fairlyActiveMinutes": 55,
+      "veryActiveMinutes": 25,
+      "restingHeartRate": 82
+    },
+    {
+      "date": "2026-03-07",
+      "week": "2026-03-01",
+      "steps": 11323,
+      "caloriesOut": 2575,
+      "caloriesBMR": 1651,
+      "activityCalories": 957,
+      "floors": 9,
+      "elevation": 90,
+      "sedentaryMinutes": 1260,
+      "lightlyActiveMinutes": 94,
+      "fairlyActiveMinutes": 9,
+      "veryActiveMinutes": 77,
+      "restingHeartRate": 81,
+      "weight": 167.5
+    },
+    {
+      "date": "2026-03-08",
+      "week": "2026-03-08",
+      "steps": 11287,
+      "caloriesOut": 2605,
+      "caloriesBMR": 1655,
+      "activityCalories": 1209,
+      "floors": 50,
+      "elevation": 500,
+      "sedentaryMinutes": 1159,
+      "lightlyActiveMinutes": 248,
+      "fairlyActiveMinutes": 6,
+      "veryActiveMinutes": 27,
+      "restingHeartRate": 83,
+      "weight": 168.4
+    },
+    {
+      "date": "2026-03-09",
+      "week": "2026-03-08",
+      "steps": 10570,
+      "caloriesOut": 2742,
+      "caloriesBMR": 1650,
+      "activityCalories": 1167,
+      "floors": 61,
+      "elevation": 610,
+      "sedentaryMinutes": 1233,
+      "lightlyActiveMinutes": 118,
+      "fairlyActiveMinutes": 21,
+      "veryActiveMinutes": 68,
+      "restingHeartRate": 84
+    },
+    {
+      "date": "2026-03-10",
+      "week": "2026-03-08",
+      "steps": 21098,
+      "caloriesOut": 3369,
+      "caloriesBMR": 1644,
+      "activityCalories": 1967,
+      "floors": 135,
+      "elevation": 1350,
+      "sedentaryMinutes": 1087,
+      "lightlyActiveMinutes": 170,
+      "fairlyActiveMinutes": 79,
+      "veryActiveMinutes": 104,
+      "restingHeartRate": 82,
+      "weight": 165.8
+    },
+    {
+      "date": "2026-03-11",
+      "week": "2026-03-08"
     }
   ]
 }
