@@ -491,7 +491,9 @@
       // On first render: restore saved view or default to week level
       if (!gymInitialized) {
         gymInitialized = true;
-        const saved = localStorage.getItem("gymView");
+        const reloadKey = localStorage.getItem("gymViewReload");
+        if (reloadKey) { localStorage.removeItem("gymViewReload"); }
+        const saved = reloadKey || localStorage.getItem("gymView");
         if (saved) {
           const s = JSON.parse(saved);
           if (s.v === 2) {
@@ -1053,7 +1055,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (!stepsInitialized) {
         stepsInitialized = true;
         expandedYears.clear(); expandedMonths.clear(); expandedWeeks.clear();
-        const saved = localStorage.getItem("stepsView");
+        const reloadKey = localStorage.getItem("stepsViewReload");
+        if (reloadKey) { localStorage.removeItem("stepsViewReload"); }
+        const saved = reloadKey || localStorage.getItem("stepsView");
         if (saved) {
           const s = JSON.parse(saved);
           if (s.v === 1) {
@@ -1073,6 +1077,21 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const items = buildItems();
       renderPivotTable(items);
       renderChart(items);
+    }
+
+    function saveViewForReload() {
+      localStorage.setItem("gymViewReload", JSON.stringify({
+        v: 2,
+        years:  [...gymExpandedYears],
+        months: [...gymExpandedMonths],
+        weeks:  [...gymExpandedWeeks],
+      }));
+      localStorage.setItem("stepsViewReload", JSON.stringify({
+        v: 1,
+        years:  [...expandedYears],
+        months: [...expandedMonths],
+        weeks:  [...expandedWeeks],
+      }));
     }
 
     function saveStepsView() {
@@ -1324,7 +1343,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       render();
       setStatus("Done! Reloading…", "#4ade80");
       if (btn) btn.disabled = false;
-      if (!skipReload) setTimeout(() => { saveGymView(); saveStepsView(); location.reload(); }, 1200);
+      if (!skipReload) setTimeout(() => { saveViewForReload(); location.reload(); }, 1200);
       return true;
     }
 
@@ -1343,7 +1362,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (btn) btn.disabled = false;
       const setStatus = (msg, color) => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; } };
       setStatus("Done! Reloading…", "#4ade80");
-      setTimeout(() => { saveGymView(); saveStepsView(); location.reload(); }, 1200);
+      setTimeout(() => { saveViewForReload(); location.reload(); }, 1200);
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
