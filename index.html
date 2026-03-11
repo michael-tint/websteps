@@ -1224,7 +1224,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         const cfg = await getDecryptedConfig(null);
         if (!cfg) { alert("No credentials available."); return; }
         const ok = await patchGist({ [filename]: { content: JSON.stringify({ data: allData[key] }, null, 2) } }, cfg.gh_pat);
-        if (!ok) alert("Failed to save.");
+        if (!ok) { alert("Failed to save."); return; }
+        setTimeout(() => location.reload(), 800);
       }
     }
 
@@ -1330,8 +1331,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       renderWeight();
       renderDashboard();
       render();
-      setStatus("Done!", "#4ade80");
+      setStatus("Done! Reloading…", "#4ade80");
       if (btn) btn.disabled = false;
+      setTimeout(() => location.reload(), 1200);
       return true;
     }
 
