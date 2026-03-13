@@ -891,7 +891,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         return avgSteps(rows.filter(r => r.date.startsWith(item.monthKey)));
       }
       if (item.type === 'day') {
-        return avgSteps(rows.filter(r => (r.week||gymWeekStart(r.date)) === item.weekKey));
+        return avgSteps(rows.filter(r => gymWeekStart(r.date) === item.weekKey));
       }
       return null;
     }
@@ -929,8 +929,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
           }
           items.push({ type:"month", key:month, label:labelMonth(month), me:avgSteps(meM), mom:avgSteps(momM), open:true });
 
-          const meWeeks  = groupBy(meM.filter(r=>r.date.startsWith(month)),  r=>r.week || gymWeekStart(r.date));
-          const momWeeks = groupBy(momM.filter(r=>r.date.startsWith(month)), r=>r.week || gymWeekStart(r.date));
+          const meWeeks  = groupBy(meM.filter(r=>r.date.startsWith(month)),  r=>gymWeekStart(r.date));
+          const momWeeks = groupBy(momM.filter(r=>r.date.startsWith(month)), r=>gymWeekStart(r.date));
           const weeks    = mergeKeys(meWeeks, momWeeks);
 
           for (const week of weeks) {
@@ -943,8 +943,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
             items.push({ type:"week", key:week, label:labelWeek(week), me:avgSteps(meW), mom:avgSteps(momW), monthKey:month, open:true });
 
             const meD={}, momD={};
-            for (const r of meAll)  if ((r.week||gymWeekStart(r.date))===week) meD[r.date]=r;
-            for (const r of momAll) if ((r.week||gymWeekStart(r.date))===week) momD[r.date]=r;
+            for (const r of meAll)  if (gymWeekStart(r.date)===week) meD[r.date]=r;
+            for (const r of momAll) if (gymWeekStart(r.date)===week) momD[r.date]=r;
             const days = mergeKeys(meD, momD);
             for (const day of days)
               items.push({ type:"day", key:day, label:labelDay(day), me:meD[day]?.steps??null, mom:momD[day]?.steps??null, weekKey:week, monthKey:month });
