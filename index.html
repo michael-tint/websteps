@@ -360,7 +360,7 @@
       const [y,m,d] = dateStr.split("-").map(Number);
       const dt = new Date(y, m-1, d);
       const _dow = dt.getDay(); // 0=Sun
-      dt.setDate(dt.getDate() - (_dow === 0 ? 6 : _dow - 1)); // back to Monday
+      dt.setDate(dt.getDate() - _dow); // back to Sunday
       return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
     }
 
@@ -843,7 +843,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const [y,m,d] = s.split("-").map(Number);
       const dt = new Date(y, m-1, d);
       const dow = dt.getDay(); // 0=Sun
-      dt.setDate(dt.getDate() - (dow === 0 ? 6 : dow - 1)); // back to Monday
+      dt.setDate(dt.getDate() - dow); // back to Sunday
       return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
     }
     function monthStartEST() {
