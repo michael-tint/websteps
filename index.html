@@ -1491,10 +1491,34 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const latestW     = withWeight.length ? mergedData[withWeight[0]].weight : null;
       const weekStart   = weekStartEST();
       const monthStart  = monthStartEST();
-      const prevWeekEntry  = withWeight.find(d => d < weekStart);
-      const prevMonthEntry = withWeight.find(d => d < monthStart);
-      const weekDelta   = (latestW != null && prevWeekEntry  != null) ? latestW - mergedData[prevWeekEntry].weight  : null;
-      const monthDelta  = (latestW != null && prevMonthEntry != null) ? latestW - mergedData[prevMonthEntry].weight : null;
+
+      // Week averages keyed by week-start date (same logic as gym page)
+      const weekWtMapW = {};
+      for (const d of withWeight) {
+        const w = gymWeekStart(d);
+        (weekWtMapW[w] = weekWtMapW[w] || []).push(mergedData[d].weight);
+      }
+      const weekAvgMapW = {};
+      for (const [w, ws] of Object.entries(weekWtMapW))
+        weekAvgMapW[w] = ws.reduce((s,v)=>s+v,0) / ws.length;
+      const sortedWksW = Object.keys(weekAvgMapW).sort();
+
+      const thisWkAvgW = weekAvgMapW[weekStart] ?? null;
+      const prevWkIdxW = sortedWksW.indexOf(weekStart) - 1;
+      const prevWkAvgW = prevWkIdxW >= 0 ? weekAvgMapW[sortedWksW[prevWkIdxW]] : null;
+      const weekDelta  = (thisWkAvgW != null && prevWkAvgW != null) ? thisWkAvgW - prevWkAvgW : null;
+
+      const monthYMW = monthStart.slice(0,7);
+      const monthWksW = sortedWksW.filter(w => w.slice(0,7) === monthYMW);
+      let monthDelta = null;
+      for (const w of monthWksW) {
+        const idx = sortedWksW.indexOf(w);
+        if (idx > 0) {
+          const delta = weekAvgMapW[w] - weekAvgMapW[sortedWksW[idx-1]];
+          monthDelta = (monthDelta ?? 0) + delta;
+        }
+      }
+
       function fmtDelta(n) {
         if (n == null) return "—";
         return (n > 0 ? "+" : "") + Number(n).toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
@@ -1502,8 +1526,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       function deltaClass(n) { return n == null ? "" : n < 0 ? "green" : n > 0 ? "red" : ""; }
       document.getElementById("weight-cards").innerHTML = `
         <div class="card"><div class="card-label">Latest Weight</div><div class="card-value blue">${latestW != null ? fmt(latestW,1) : "—"}</div></div>
-        <div class="card"><div class="card-label">Week Delta</div><div class="card-value ${deltaClass(weekDelta)}">${fmtDelta(weekDelta)}</div></div>
-        <div class="card"><div class="card-label">Month Delta</div><div class="card-value ${deltaClass(monthDelta)}">${fmtDelta(monthDelta)}</div></div>
+        <div class="card"><div class="card-label">Week Δ</div><div class="card-value ${deltaClass(weekDelta)}">${fmtDelta(weekDelta)}</div></div>
+        <div class="card"><div class="card-label">Month Δ</div><div class="card-value ${deltaClass(monthDelta)}">${fmtDelta(monthDelta)}</div></div>
       `;
 
       const weightFrom = document.getElementById("weight-from")?.value || "";
