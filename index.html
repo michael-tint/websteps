@@ -1486,17 +1486,27 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         if (iso <= earliest) break;
       }
 
-      // Summary cards
-      const withWeight  = allDates.filter(d => mergedData[d]?.weight != null);
-      const latestW     = withWeight.length ? mergedData[withWeight[0]].weight : null;
+      // Summary cards — build weight entries same way as gym page
+      const weightDataDatesW = new Set(Object.keys(mergedData));
+      const wtEntriesW = [
+        ...Object.entries(mergedData)
+          .filter(([d]) => d <= today)
+          .map(([date, e]) => ({ date, weight: meWeightByDate[date] ?? e.weight ?? null }))
+          .filter(e => e.weight != null),
+        ...(allData.me || [])
+          .filter(r => r.weight != null && !weightDataDatesW.has(r.date) && r.date <= today)
+          .map(r => ({ date: r.date, weight: r.weight })),
+      ].sort((a, b) => a.date < b.date ? -1 : 1);
+
+      const latestW     = wtEntriesW.length ? wtEntriesW[wtEntriesW.length-1].weight : null;
       const weekStart   = weekStartEST();
       const monthStart  = monthStartEST();
 
       // Week averages keyed by week-start date (same logic as gym page)
       const weekWtMapW = {};
-      for (const d of withWeight) {
-        const w = gymWeekStart(d);
-        (weekWtMapW[w] = weekWtMapW[w] || []).push(mergedData[d].weight);
+      for (const e of wtEntriesW) {
+        const w = gymWeekStart(e.date);
+        (weekWtMapW[w] = weekWtMapW[w] || []).push(e.weight);
       }
       const weekAvgMapW = {};
       for (const [w, ws] of Object.entries(weekWtMapW))
