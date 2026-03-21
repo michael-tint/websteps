@@ -373,15 +373,18 @@
       const stepVals = entries.map(e => e.steps).filter(v => v != null && v > 0);
       const steps    = stepVals.length ? stepVals.reduce((s,v) => s+v, 0) / stepVals.length : null;
       const gymCount = entries.filter(e => e.gym).length;
-      const comp = entries.find(e => e.fat != null || e.muscle != null || e.bone != null);
+      const boneVals   = entries.map(e => e.bone).filter(v => v != null);
+      const muscleVals = entries.map(e => e.muscle).filter(v => v != null);
+      const fatVals    = entries.map(e => e.fat).filter(v => v != null);
+      const bone   = boneVals.length   ? boneVals.reduce((s,v)=>s+v,0)/boneVals.length     : null;
+      const muscle = muscleVals.length ? muscleVals.reduce((s,v)=>s+v,0)/muscleVals.length : null;
+      const fat    = fatVals.length    ? fatVals.reduce((s,v)=>s+v,0)/fatVals.length       : null;
       return {
         avgWt, maxWt, steps, gymCount,
         bmi:    calcBMI(avgWt),
         maxBMI: calcBMI(maxWt),
-        bone:   comp?.bone   ?? null,
-        muscle: comp?.muscle ?? null,
-        fat:    comp?.fat    ?? null,
-        fatPct: comp ? calcFatPct(comp.fat, comp.muscle) : null,
+        bone, muscle, fat,
+        fatPct: calcFatPct(fat, muscle),
       };
     }
 
@@ -392,7 +395,12 @@
       const dc = v => v == null ? "" : v < 0 ? " class=\"green\"" : v > 0 ? " class=\"red\"" : "";
       const sorted = [...entries].sort((a,b) => a.date < b.date ? -1 : 1);
       if (!sorted[0]) return `<td></td>`.repeat(12);
-      const firstComp = sorted.find(e => e.bone != null || e.muscle != null || e.fat != null) || null;
+      const boneVals   = entries.map(e => e.bone).filter(v => v != null);
+      const muscleVals = entries.map(e => e.muscle).filter(v => v != null);
+      const fatVals    = entries.map(e => e.fat).filter(v => v != null);
+      const avgBone   = boneVals.length   ? boneVals.reduce((s,v)=>s+v,0)/boneVals.length     : null;
+      const avgMuscle = muscleVals.length ? muscleVals.reduce((s,v)=>s+v,0)/muscleVals.length : null;
+      const avgFat    = fatVals.length    ? fatVals.reduce((s,v)=>s+v,0)/fatVals.length       : null;
       const weights = entries.map(e => e.weight).filter(v => v != null);
       const avgWt = weights.length ? weights.reduce((s,v)=>s+v,0)/weights.length : null;
       const maxWt = weights.length ? Math.max(...weights) : null;
@@ -403,8 +411,8 @@
       const steps = stepVals.length ? Math.round(stepVals.reduce((s,v) => s+v, 0) / stepVals.length) : null;
       return `<td>${f(avgWt)}</td><td>${f(calcBMI(avgWt))}</td>
         <td>${f(maxWt)}</td><td>${f(calcBMI(maxWt))}</td>
-        <td>${open ? "" : f(firstComp?.bone)}</td><td>${open ? "" : f(firstComp?.muscle)}</td>
-        <td>${open ? "" : f(firstComp?.fat)}</td><td>${open ? "" : fp(calcFatPct(firstComp?.fat, firstComp?.muscle))}</td>
+        <td>${open ? "" : f(avgBone)}</td><td>${open ? "" : f(avgMuscle)}</td>
+        <td>${open ? "" : f(avgFat)}</td><td>${open ? "" : fp(calcFatPct(avgFat, avgMuscle))}</td>
         <td>${steps != null ? fmt(steps, 0) : ""}</td><td>${f(sessPerWk)}</td>
         <td${dc(avgWtDelta)}>${fd(avgWtDelta)}</td><td${dc(maxWtDelta)}>${fd(maxWtDelta)}</td>`;
     }
@@ -584,8 +592,8 @@
           <td><span class="arrow">${yOpen?"▼":"▶"}</span>${year}</td>${gymYearCols(yEntries, yAvgDelta, yMaxDelta, yOpen)}</tr>`;
         if (!yOpen) {
           const yWeeks = Object.values(tree[year]).flatMap(m => Object.keys(m));
-          const yComp = Object.values(tree[year]).flatMap(m => Object.values(m)).flat().reverse().find(e => e.fat != null);
-          chartItems.push({ cy: year, cm: null, cw: null, weeks: yWeeks, bone: yComp?.bone??null, muscle: yComp?.muscle??null, fat: yComp?.fat??null });
+          const yAgg = allYearAggs[year];
+          chartItems.push({ cy: year, cm: null, cw: null, weeks: yWeeks, bone: yAgg?.bone??null, muscle: yAgg?.muscle??null, fat: yAgg?.fat??null });
           continue;
         }
 
@@ -607,8 +615,7 @@
           html += `<tr class="row-month${mOpen?" open":""}" onclick="toggleGymMonth('${month}')">
             <td><span class="arrow">${mOpen?"▼":"▶"}</span>${mLabel}</td>${gymCols(mAgg, mEx)}</tr>`;
           if (!mOpen) {
-            const mComp = mEntries.slice().reverse().find(e => e.fat != null);
-            chartItems.push({ cy: year, cm: mLabel, cw: null, weeks: Object.keys(tree[year][month]), bone: mComp?.bone??null, muscle: mComp?.muscle??null, fat: mComp?.fat??null });
+            chartItems.push({ cy: year, cm: mLabel, cw: null, weeks: Object.keys(tree[year][month]), bone: mAgg.bone??null, muscle: mAgg.muscle??null, fat: mAgg.fat??null });
             continue;
           }
 
@@ -629,8 +636,7 @@
             html += `<tr class="row-week${wOpen?" open":""}" onclick="toggleGymWeek('${week}')">
               <td><span class="arrow">${wOpen?"▼":"▶"}</span>${wLabel}</td>${gymCols(wAgg, wEx)}</tr>`;
             if (!wOpen) {
-              const wComp = wEntries.slice().reverse().find(e => e.fat != null);
-              chartItems.push({ cy: year, cm: mLabel, cw: wLabel, weeks: [week], bone: wComp?.bone??null, muscle: wComp?.muscle??null, fat: wComp?.fat??null });
+              chartItems.push({ cy: year, cm: mLabel, cw: wLabel, weeks: [week], bone: wAgg.bone??null, muscle: wAgg.muscle??null, fat: wAgg.fat??null });
             }
             if (!wOpen) continue;
 
