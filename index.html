@@ -665,10 +665,10 @@
         const prev = i > 0 ? chartItems[i-1] : null;
         if (item.avgWt === undefined) { item.avgWt = weekAvgWt(item.weeks); item.maxWt = weekAvgMax(item.weeks); }
         item.label = [
-          item.cy && item.cy !== prev?.cy ? item.cy : "",
-          item.cm && item.cm !== prev?.cm ? item.cm : "",
-          item.cw && item.cw !== prev?.cw ? item.cw : "",
           item.cd || "",
+          item.cw && item.cw !== prev?.cw ? item.cw : "",
+          item.cm && item.cm !== prev?.cm ? item.cm : "",
+          item.cy && item.cy !== prev?.cy ? item.cy : "",
         ];
       });
       const chartLabels = chartItems.map(i => i.label);
@@ -681,8 +681,40 @@
         const total = i.weeks.reduce((s,w) => s + (allWeekAggs[w]?.gymCount || 0), 0);
         return i.weeks.length ? total / i.weeks.length : null;
       });
+      const gymTickPlugin = {
+        id: 'gymTicks',
+        afterDraw(chart) {
+          const xScale = chart.scales.x;
+          if (!xScale) return;
+          const lbs = chart.data.labels;
+          if (!lbs || !lbs.length) return;
+          const axisTop = chart.chartArea.bottom;
+          const axisBot = xScale.bottom;
+          const rowH    = (axisBot - axisTop) / 4;
+          const ctx     = chart.ctx;
+          ctx.save();
+          ctx.strokeStyle = '#475569';
+          ctx.lineWidth   = 1;
+          lbs.forEach((lbl, idx) => {
+            let depth = 4; // year default
+            if (Array.isArray(lbl)) {
+              if      (lbl[0] !== '') depth = 1; // day
+              else if (lbl[1] !== '') depth = 2; // week
+              else if (lbl[2] !== '') depth = 3; // month
+            }
+            const x = xScale.getPixelForValue(idx - 0.5);
+            ctx.beginPath();
+            ctx.moveTo(x, axisTop);
+            ctx.lineTo(x, axisTop + rowH * depth);
+            ctx.stroke();
+          });
+          ctx.restore();
+        }
+      };
+
       if (gymChart) gymChart.destroy();
       gymChart = new Chart(document.getElementById("gymChart"), {
+        plugins: [gymTickPlugin],
         data: {
           labels: chartLabels,
           datasets: [
@@ -704,7 +736,7 @@
             tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}` } },
           },
           scales: {
-            x: { ticks: { color: "#64748b", maxRotation: 45 }, grid: { color: "#1e293b" } },
+            x: { ticks: { color: "#64748b", maxRotation: 45 }, grid: { color: "#1e293b", drawTicks: false } },
             y:  { min: compMin, max: compMax, ticks: { color: "#64748b", callback: v => fmt(v,1) }, grid: { color: "#334155" } },
             y2: { min: 0, max: 7, position: "right", ticks: { color: "#64748b", stepSize: 1 }, grid: { drawOnChartArea: false } },
           },
