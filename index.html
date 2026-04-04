@@ -1565,16 +1565,14 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const prevWkAvgW = prevWkIdxW >= 0 ? weekAvgMapW[sortedWksW[prevWkIdxW]] : null;
       const weekDelta  = (thisWkAvgW != null && prevWkAvgW != null) ? thisWkAvgW - prevWkAvgW : null;
 
-      const monthYMW = monthStart.slice(0,7);
-      const monthWksW = sortedWksW.filter(w => w.slice(0,7) === monthYMW);
-      let monthDelta = null;
-      for (const w of monthWksW) {
-        const idx = sortedWksW.indexOf(w);
-        if (idx > 0) {
-          const delta = weekAvgMapW[w] - weekAvgMapW[sortedWksW[idx-1]];
-          monthDelta = (monthDelta ?? 0) + delta;
-        }
-      }
+      const monthYMW = weekStart.slice(0,7);
+      const [mYW, mMW] = monthYMW.split("-").map(Number);
+      const prevMonthYMW = `${mMW === 1 ? mYW - 1 : mYW}-${String(mMW === 1 ? 12 : mMW - 1).padStart(2, "0")}`;
+      const curMonthWkAvgsW  = sortedWksW.filter(w => w.slice(0,7) === monthYMW).map(w => weekAvgMapW[w]).filter(v => v != null);
+      const prevMonthWkAvgsW = sortedWksW.filter(w => w.slice(0,7) === prevMonthYMW).map(w => weekAvgMapW[w]).filter(v => v != null);
+      const curMonthAvgW  = curMonthWkAvgsW.length  ? curMonthWkAvgsW.reduce((s,v)=>s+v,0)  / curMonthWkAvgsW.length  : null;
+      const prevMonthAvgW = prevMonthWkAvgsW.length ? prevMonthWkAvgsW.reduce((s,v)=>s+v,0) / prevMonthWkAvgsW.length : null;
+      const monthDelta = (curMonthAvgW != null && prevMonthAvgW != null) ? curMonthAvgW - prevMonthAvgW : null;
 
       function fmtDelta(n) {
         if (n == null) return "—";
