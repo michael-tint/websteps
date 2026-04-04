@@ -485,11 +485,12 @@
       const lossWeek  = (thisWkAvg != null && prevWkAvg != null) ? thisWkAvg - prevWkAvg : null;
 
       // Loss This Month: avg(this month's weights) - avg(prev month's weights)
-      const monthYM = monthStart.slice(0,7);
+      // Use week-bucketed months (same as table): month = gymWeekStart(entry.date).slice(0,7)
+      const monthYM = weekStart.slice(0,7); // month of current week's Monday
       const [mY, mM] = monthYM.split("-").map(Number);
       const prevMonthYM = `${mM === 1 ? mY - 1 : mY}-${String(mM === 1 ? 12 : mM - 1).padStart(2, "0")}`;
-      const curMonthWts  = wtEntries.filter(e => e.date.slice(0,7) === monthYM).map(e => e.weight);
-      const prevMonthWts = wtEntries.filter(e => e.date.slice(0,7) === prevMonthYM).map(e => e.weight);
+      const curMonthWts  = wtEntries.filter(e => gymWeekStart(e.date).slice(0,7) === monthYM).map(e => e.weight);
+      const prevMonthWts = wtEntries.filter(e => gymWeekStart(e.date).slice(0,7) === prevMonthYM).map(e => e.weight);
       const curMonthAvg  = curMonthWts.length  ? curMonthWts.reduce((s,v)=>s+v,0)  / curMonthWts.length  : null;
       const prevMonthAvg = prevMonthWts.length ? prevMonthWts.reduce((s,v)=>s+v,0) / prevMonthWts.length : null;
       const lossMon = (curMonthAvg != null && prevMonthAvg != null) ? curMonthAvg - prevMonthAvg : null;
