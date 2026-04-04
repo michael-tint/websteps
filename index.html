@@ -489,10 +489,10 @@
       const monthYM = weekStart.slice(0,7); // month of current week's Monday
       const [mY, mM] = monthYM.split("-").map(Number);
       const prevMonthYM = `${mM === 1 ? mY - 1 : mY}-${String(mM === 1 ? 12 : mM - 1).padStart(2, "0")}`;
-      const curMonthWts  = wtEntries.filter(e => gymWeekStart(e.date).slice(0,7) === monthYM).map(e => e.weight);
-      const prevMonthWts = wtEntries.filter(e => gymWeekStart(e.date).slice(0,7) === prevMonthYM).map(e => e.weight);
-      const curMonthAvg  = curMonthWts.length  ? curMonthWts.reduce((s,v)=>s+v,0)  / curMonthWts.length  : null;
-      const prevMonthAvg = prevMonthWts.length ? prevMonthWts.reduce((s,v)=>s+v,0) / prevMonthWts.length : null;
+      const curMonthWkAvgs  = sortedWks.filter(w => w.slice(0,7) === monthYM).map(w => weekAvgMap[w]).filter(v => v != null);
+      const prevMonthWkAvgs = sortedWks.filter(w => w.slice(0,7) === prevMonthYM).map(w => weekAvgMap[w]).filter(v => v != null);
+      const curMonthAvg  = curMonthWkAvgs.length  ? curMonthWkAvgs.reduce((s,v)=>s+v,0)  / curMonthWkAvgs.length  : null;
+      const prevMonthAvg = prevMonthWkAvgs.length ? prevMonthWkAvgs.reduce((s,v)=>s+v,0) / prevMonthWkAvgs.length : null;
       const lossMon = (curMonthAvg != null && prevMonthAvg != null) ? curMonthAvg - prevMonthAvg : null;
 
       function fmtDelta(n) {
@@ -549,13 +549,23 @@
 
       const allMonthAggs = {};
       for (const y of Object.keys(tree))
-        for (const m of Object.keys(tree[y]))
-          allMonthAggs[m] = gymAggregate(Object.values(tree[y][m]).flat());
+        for (const m of Object.keys(tree[y])) {
+          const base = gymAggregate(Object.values(tree[y][m]).flat());
+          const wAvgs = Object.keys(tree[y][m]).map(w => allWeekAggs[w]?.avgWt).filter(v => v != null);
+          base.avgWt = wAvgs.length ? wAvgs.reduce((s,v)=>s+v,0)/wAvgs.length : null;
+          base.bmi = calcBMI(base.avgWt);
+          allMonthAggs[m] = base;
+        }
       const sortedMonths = Object.keys(allMonthAggs).sort();
 
       const allYearAggs = {};
-      for (const y of Object.keys(tree))
-        allYearAggs[y] = gymAggregate(Object.values(tree[y]).flatMap(m => Object.values(m)).flat());
+      for (const y of Object.keys(tree)) {
+        const base = gymAggregate(Object.values(tree[y]).flatMap(m => Object.values(m)).flat());
+        const mAvgs = Object.keys(tree[y]).map(m => allMonthAggs[m]?.avgWt).filter(v => v != null);
+        base.avgWt = mAvgs.length ? mAvgs.reduce((s,v)=>s+v,0)/mAvgs.length : null;
+        base.bmi = calcBMI(base.avgWt);
+        allYearAggs[y] = base;
+      }
       const sortedYears = Object.keys(allYearAggs).sort();
 
       const sortedWtEntries = allEntries.filter(e => e.weight != null);
