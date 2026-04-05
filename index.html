@@ -963,8 +963,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         }
         items.push({ type:"year", key:year, label:labelYear(year), me:avgSteps(meY), mom:avgSteps(momY), open:true });
 
-        const meMonths  = groupBy(meY,  r=>r.date.slice(0,7));
-        const momMonths = groupBy(momY, r=>r.date.slice(0,7));
+        const meMonths  = groupBy(meY,  r=>gymWeekStart(r.date).slice(0,7));
+        const momMonths = groupBy(momY, r=>gymWeekStart(r.date).slice(0,7));
         const months    = mergeKeys(meMonths, momMonths);
 
         for (const month of months) {
@@ -976,8 +976,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
           }
           items.push({ type:"month", key:month, label:labelMonth(month), me:avgSteps(meM), mom:avgSteps(momM), open:true });
 
-          const meWeeks  = groupBy(meM.filter(r=>r.date.startsWith(month)),  r=>gymWeekStart(r.date));
-          const momWeeks = groupBy(momM.filter(r=>r.date.startsWith(month)), r=>gymWeekStart(r.date));
+          const meWeeks  = groupBy(meM,  r=>gymWeekStart(r.date));
+          const momWeeks = groupBy(momM, r=>gymWeekStart(r.date));
           const weeks    = mergeKeys(meWeeks, momWeeks);
 
           for (const week of weeks) {
@@ -990,8 +990,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
             items.push({ type:"week", key:week, label:labelWeek(week), me:avgSteps(meW), mom:avgSteps(momW), monthKey:month, open:true });
 
             const meD={}, momD={};
-            for (const r of meAll)  if (gymWeekStart(r.date)===week) meD[r.date]=r;
-            for (const r of momAll) if (gymWeekStart(r.date)===week) momD[r.date]=r;
+            for (const r of meM)  if (gymWeekStart(r.date)===week) meD[r.date]=r;
+            for (const r of momM) if (gymWeekStart(r.date)===week) momD[r.date]=r;
             const days = mergeKeys(meD, momD);
             for (const day of days)
               items.push({ type:"day", key:day, label:labelDay(day), me:meD[day]?.steps??null, mom:momD[day]?.steps??null, weekKey:week, monthKey:month });
