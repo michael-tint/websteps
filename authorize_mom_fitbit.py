@@ -1,18 +1,17 @@
 """
 authorize_mom_fitbit.py — OAuth flow for mom's Fitbit account using
 client_id/secret from the encrypted config.json (momCreds).
-Writes the new refresh token to fitbit_refresh_token.txt, then
-calls update_mom_token.py logic to save it everywhere.
+
+Opens the browser, then prompts you to paste the redirect URL.
+Updates fitbit_refresh_token.txt, encrypted config, and mom.json on Gist.
 """
 import base64, json, os, urllib.request, urllib.parse, webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from threading import Thread
 
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-_dir = os.path.dirname(__file__)
+_dir = os.path.dirname(os.path.abspath(__file__))
 PASSWORD = b"websteps123"
 ITERS    = 100_000
 
@@ -65,7 +64,7 @@ client_secret = mom["client_secret"]
 pat           = creds["gh_pat"]
 print(f"Using mom client_id: {client_id}")
 
-# ── OAuth flow ────────────────────────────────────────────────────────────────
+# ── Build auth URL and open browser ───────────────────────────────────────────
 REDIRECT_URI = "http://localhost:8080"
 SCOPES       = "activity heartrate weight profile"
 
@@ -79,59 +78,48 @@ auth_url = (
     f"&prompt=login"
 )
 
-code_holder = [None]
-
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        code_holder[0] = params.get("code", [None])[0]
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.end_headers()
-        self.wfile.write(b"<h2>Authorized! You can close this tab.</h2>")
-    def log_message(self, fmt, *args):
-        pass
-
-server = HTTPServer(("", 8080), Handler)
-t = Thread(target=server.handle_request)
-t.start()
-
-print("Opening browser for mom's Fitbit authorization...")
+print("\nOpening browser for mom's Fitbit authorization...")
 webbrowser.open(auth_url)
-print("Waiting for redirect...")
-t.join()
-server.server_close()
+print("\nAfter approving, the browser will show an error page (that's fine).")
+print("Copy the full URL from the address bar and paste it here.\n")
+redirect_url = input("Paste redirect URL: ").strip()
 
-if not code_holder[0]:
-    print("No code received.")
+# ── Extract code from pasted URL ──────────────────────────────────────────────
+params = urllib.parse.parse_qs(urllib.parse.urlparse(redirect_url).query)
+code = params.get("code", [None])[0]
+if not code:
+    print("No code found in URL.")
     exit(1)
+print(f"Got code: {code[:16]}...")
 
-print("Got code, exchanging for tokens...")
+# ── Exchange code for tokens ──────────────────────────────────────────────────
+print("Exchanging for tokens...")
 auth_header = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 req = urllib.request.Request(
     "https://api.fitbit.com/oauth2/token",
     data=urllib.parse.urlencode({
         "grant_type":   "authorization_code",
-        "code":         code_holder[0],
+        "code":         code,
         "redirect_uri": REDIRECT_URI,
     }).encode(),
-    headers={
-        "Authorization": f"Basic {auth_header}",
-        "Content-Type":  "application/x-www-form-urlencoded",
-    }
+    headers={"Authorization": f"Basic {auth_header}", "Content-Type": "application/x-www-form-urlencoded"},
 )
-tokens = json.loads(urllib.request.urlopen(req).read())
+try:
+    tokens = json.loads(urllib.request.urlopen(req).read())
+except urllib.error.HTTPError as e:
+    print(f"Token exchange failed - HTTP {e.code}: {e.read().decode()}")
+    exit(1)
+
 new_token = tokens["refresh_token"]
 print(f"New token: {new_token[:16]}...")
 print(f"Scopes granted: {tokens.get('scope', 'unknown')}")
 
 # ── Write fitbit_refresh_token.txt ────────────────────────────────────────────
-token_path = os.path.join(_dir, "fitbit_refresh_token.txt")
-with open(token_path, "w") as f:
+with open(os.path.join(_dir, "fitbit_refresh_token.txt"), "w") as f:
     f.write(new_token)
 print("fitbit_refresh_token.txt updated.")
 
-# ── Update encrypted config (momCreds.refresh_token) ─────────────────────────
+# ── Update encrypted config ───────────────────────────────────────────────────
 creds["momCreds"]["refresh_token"] = new_token
 blob, salt, iv = encrypt(creds)
 app_config["encryptedBlob"] = blob
@@ -149,7 +137,7 @@ try:
 except Exception as e:
     print(f"config.json Gist update failed ({e})")
 
-# ── Update mom.json creds.refresh_token on Gist ───────────────────────────────
+# ── Update mom.json on Gist ───────────────────────────────────────────────────
 try:
     req  = urllib.request.Request(f"https://api.github.com/gists/{gist_id}",
                                   headers={"Authorization": f"token {pat}",
