@@ -614,23 +614,18 @@
           const yWeeks = sortedYearMonths.flatMap(m => Object.keys(tree[year][m]));
           const ySessTotal = yWeeks.reduce((s,w) => s + (allWeekAggs[w]?.gymCount || 0), 0);
           const ySess = yWeeks.length ? ySessTotal / yWeeks.length : null;
-          let firstPushed = false;
-          sortedYearMonths.forEach((month) => {
+          sortedYearMonths.forEach((month, mi) => {
             const mEntries = Object.values(tree[year][month]).flat();
             const mAgg = gymAggregate(mEntries);
-            const hasBMF = mAgg.bone != null || mAgg.muscle != null || mAgg.fat != null;
-            if (!hasBMF && firstPushed) return;
-            const isFirst = !firstPushed;
-            firstPushed = true;
+            const [,mm] = month.split("-");
+            const mLabel = new Date(2000,+mm-1).toLocaleString("default",{month:"short"});
             chartItems.push({
               cy: year, cm: null, cw: null,
               weeks: Object.keys(tree[year][month]),
               bone: mAgg.bone??null, muscle: mAgg.muscle??null, fat: mAgg.fat??null,
-              avgWt: isFirst ? (yAgg?.avgWt??null) : null,
-              maxWt: isFirst ? (yAgg?.maxWt??null) : null,
+              avgWt: mi === 0 ? (yAgg?.avgWt??null) : null,
+              maxWt: mi === 0 ? (yAgg?.maxWt??null) : null,
               sess:  ySess,
-              noTick: !isFirst,
-              collapsedYear: true,
             });
           });
           continue;
@@ -735,7 +730,6 @@
           ctx.strokeStyle = '#475569';
           ctx.lineWidth   = 1;
           lbs.forEach((lbl, idx) => {
-            if (chartItems[idx]?.noTick) return;
             let depth = 4; // year default
             if (Array.isArray(lbl)) {
               if      (lbl[0] !== '') depth = 1; // day
@@ -758,14 +752,10 @@
         data: {
           labels: chartLabels,
           datasets: [
-            { type: "bar",  label: "Gym", data: sessData.map((v,i) => chartItems[i]?.collapsedYear ? null : v), yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderWidth: 0, barPercentage: 1.0, categoryPercentage: 1.0, order: 10 },
-            { type: "bar",  label: "",    data: sessData.map((v,i) => chartItems[i]?.collapsedYear ? v    : null), yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderWidth: 0, barPercentage: 0.75, categoryPercentage: 0.25, order: 10 },
-            { type: "bar",  label: "Bone",   data: chartItems.map(i => i.collapsedYear ? null : i.bone),   backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp",  barPercentage: 0.5,  categoryPercentage: 0.8,  order: 2 },
-            { type: "bar",  label: "Muscle", data: chartItems.map(i => i.collapsedYear ? null : i.muscle), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp",  barPercentage: 0.5,  categoryPercentage: 0.8,  order: 2 },
-            { type: "bar",  label: "Fat",    data: chartItems.map(i => i.collapsedYear ? null : i.fat),    backgroundColor: "rgba(244,114,182,0.80)", stack: "comp",  barPercentage: 0.5,  categoryPercentage: 0.8,  order: 2 },
-            { type: "bar",  label: "",       data: chartItems.map(i => i.collapsedYear ? i.bone   : null), backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp2", barPercentage: 0.75, categoryPercentage: 0.25, order: 2 },
-            { type: "bar",  label: "",       data: chartItems.map(i => i.collapsedYear ? i.muscle : null), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp2", barPercentage: 0.75, categoryPercentage: 0.25, order: 2 },
-            { type: "bar",  label: "",       data: chartItems.map(i => i.collapsedYear ? i.fat    : null), backgroundColor: "rgba(244,114,182,0.80)", stack: "comp2", barPercentage: 0.75, categoryPercentage: 0.25, order: 2 },
+            { type: "bar",  label: "Gym", data: sessData, yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderWidth: 0, barPercentage: 1.0, categoryPercentage: 1.0, order: 10 },
+            { type: "bar",  label: "Bone",   data: chartItems.map(i => i.bone),   backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
+            { type: "bar",  label: "Muscle", data: chartItems.map(i => i.muscle), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
+            { type: "bar",  label: "Fat",    data: chartItems.map(i => i.fat),    backgroundColor: "rgba(244,114,182,0.80)", stack: "comp", barPercentage: 0.5, order: 2 },
             { type: "line", label: "Avg Wt", data: avgWts, borderColor: "rgba(255,255,255,0.85)", backgroundColor: "transparent", borderWidth: 2, pointRadius: 2, tension: 0.3, order: 1 },
             { type: "line", label: "Max Wt", data: maxWts, borderColor: "rgba(148,163,184,0.7)",  backgroundColor: "transparent", borderWidth: 1.5, pointRadius: 2, tension: 0.3, borderDash: [4,3], order: 1 },
           ],
@@ -776,8 +766,8 @@
           maintainAspectRatio: false,
           datasets: { bar: { grouped: false } },
           plugins: {
-            legend: { labels: { color: "#94a3b8", filter: item => item.text !== "" } },
-            tooltip: { callbacks: { label: ctx => ctx.dataset.label ? ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}` : null } },
+            legend: { labels: { color: "#94a3b8" } },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}` } },
           },
           scales: {
             x: { ticks: { color: "#64748b", maxRotation: 45 }, grid: { color: "#1e293b", drawTicks: false } },
