@@ -950,8 +950,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const stepsTo   = document.getElementById("steps-to")?.value   || "";
       const meAll  = (allData.me  || []).filter(r => r.date >= STEPS_FROM && (!stepsFrom || r.date >= stepsFrom) && (!stepsTo || r.date <= stepsTo));
       const momAll = (allData.mom || []).filter(r => r.date >= STEPS_FROM && (!stepsFrom || r.date >= stepsFrom) && (!stepsTo || r.date <= stepsTo));
-      const meYears  = groupBy(meAll,  r=>r.date.slice(0,4));
-      const momYears = groupBy(momAll, r=>r.date.slice(0,4));
+      const meYears  = groupBy(meAll,  r=>gymWeekStart(r.date).slice(0,4));
+      const momYears = groupBy(momAll, r=>gymWeekStart(r.date).slice(0,4));
       const years    = mergeKeys(meYears, momYears);
 
       for (const year of years) {
