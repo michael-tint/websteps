@@ -363,6 +363,15 @@
       dt.setDate(dt.getDate() - _dow); // back to Sunday
       return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
     }
+    // Steps uses a year-anchored week scheme: Jan 1 through the first Saturday
+    // is always the first week of that year; remaining weeks run Sun–Sat.
+    function stepsWeekStart(dateStr) {
+      const [y,m,d] = dateStr.split("-").map(Number);
+      const jan1Dow = new Date(y, 0, 1).getDay(); // 0=Sun, 6=Sat
+      const firstSatDate = 1 + (jan1Dow === 6 ? 0 : 6 - jan1Dow);
+      if (m === 1 && d <= firstSatDate) return `${y}-01-01`;
+      return gymWeekStart(dateStr);
+    }
 
     // Aggregate a set of date entries: avg weight, BMI, max weight, max BMI, gym count,
     // and the first composition measurement found (bone/muscle/fat)
@@ -938,7 +947,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         return avgSteps(rows.filter(r => r.date.startsWith(item.monthKey)));
       }
       if (item.type === 'day') {
-        return avgSteps(rows.filter(r => gymWeekStart(r.date) === item.weekKey));
+        return avgSteps(rows.filter(r => stepsWeekStart(r.date) === item.weekKey));
       }
       return null;
     }
@@ -950,8 +959,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const stepsTo   = document.getElementById("steps-to")?.value   || "";
       const meAll  = (allData.me  || []).filter(r => r.date >= STEPS_FROM && (!stepsFrom || r.date >= stepsFrom) && (!stepsTo || r.date <= stepsTo));
       const momAll = (allData.mom || []).filter(r => r.date >= STEPS_FROM && (!stepsFrom || r.date >= stepsFrom) && (!stepsTo || r.date <= stepsTo));
-      const meYears  = groupBy(meAll,  r=>gymWeekStart(r.date).slice(0,4));
-      const momYears = groupBy(momAll, r=>gymWeekStart(r.date).slice(0,4));
+      const meYears  = groupBy(meAll,  r=>r.date.slice(0,4));
+      const momYears = groupBy(momAll, r=>r.date.slice(0,4));
       const years    = mergeKeys(meYears, momYears);
 
       for (const year of years) {
@@ -963,8 +972,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         }
         items.push({ type:"year", key:year, label:labelYear(year), me:avgSteps(meY), mom:avgSteps(momY), open:true });
 
-        const meMonths  = groupBy(meY,  r=>gymWeekStart(r.date).slice(0,7));
-        const momMonths = groupBy(momY, r=>gymWeekStart(r.date).slice(0,7));
+        const meMonths  = groupBy(meY,  r=>stepsWeekStart(r.date).slice(0,7));
+        const momMonths = groupBy(momY, r=>stepsWeekStart(r.date).slice(0,7));
         const months    = mergeKeys(meMonths, momMonths);
 
         for (const month of months) {
@@ -976,8 +985,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
           }
           items.push({ type:"month", key:month, label:labelMonth(month), me:avgSteps(meM), mom:avgSteps(momM), open:true });
 
-          const meWeeks  = groupBy(meM,  r=>gymWeekStart(r.date));
-          const momWeeks = groupBy(momM, r=>gymWeekStart(r.date));
+          const meWeeks  = groupBy(meM,  r=>stepsWeekStart(r.date));
+          const momWeeks = groupBy(momM, r=>stepsWeekStart(r.date));
           const weeks    = mergeKeys(meWeeks, momWeeks);
 
           for (const week of weeks) {
@@ -990,8 +999,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
             items.push({ type:"week", key:week, label:labelWeek(week), me:avgSteps(meW), mom:avgSteps(momW), monthKey:month, open:true });
 
             const meD={}, momD={};
-            for (const r of meM)  if (gymWeekStart(r.date)===week) meD[r.date]=r;
-            for (const r of momM) if (gymWeekStart(r.date)===week) momD[r.date]=r;
+            for (const r of meM)  if (stepsWeekStart(r.date)===week) meD[r.date]=r;
+            for (const r of momM) if (stepsWeekStart(r.date)===week) momD[r.date]=r;
             const days = mergeKeys(meD, momD);
             for (const day of days)
               items.push({ type:"day", key:day, label:labelDay(day), me:meD[day]?.steps??null, mom:momD[day]?.steps??null, weekKey:week, monthKey:month });
