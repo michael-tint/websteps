@@ -139,11 +139,13 @@
     td:first-child { text-align: left; }
 
     /* pivot row levels */
-    #panel-gym table { font-size: 0.72rem; }
-    #panel-gym th { padding: 0.35rem 0.4rem; text-align: center; }
-    #panel-gym td { padding: 0.22rem 0.4rem; text-align: center; }
-    #panel-gym th:first-child, #panel-gym td:first-child { text-align: left; }
-    #panel-gym th:nth-child(11), #panel-gym td:nth-child(11) { width: 15ch; min-width: 15ch; max-width: 15ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #panel-gym table, #panel-gym2 table { font-size: 0.72rem; }
+    #panel-gym th, #panel-gym2 th { padding: 0.35rem 0.4rem; text-align: center; }
+    #panel-gym td, #panel-gym2 td { padding: 0.22rem 0.4rem; text-align: center; }
+    #panel-gym th:first-child, #panel-gym td:first-child,
+    #panel-gym2 th:first-child, #panel-gym2 td:first-child { text-align: left; }
+    #panel-gym th:nth-child(11), #panel-gym td:nth-child(11),
+    #panel-gym2 th:nth-child(11), #panel-gym2 td:nth-child(11) { width: 15ch; min-width: 15ch; max-width: 15ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     tr.row-year  > td             { background: #0c1526; border-top-color: #1e293b; }
     tr.row-year  > td:first-child { font-weight: 700; color: #f8fafc; padding-left: 0.4rem; }
     tr.row-month > td             { background: #1e293b; }
@@ -177,6 +179,7 @@
       <h1>WebSteps</h1>
       <div class="tabs">
         <button class="tab active" onclick="switchTab('gym',this)">Gym</button>
+        <button class="tab" onclick="switchTab('gym2',this)">Gym2</button>
         <button class="tab" onclick="switchTab('dashboard',this)">Steps</button>
         <button class="tab" onclick="switchTab('weight',this)">Weight</button>
         <button class="tab" onclick="switchTab('me',this)">Me</button>
@@ -254,6 +257,49 @@
       </div>
       <div class="chart-wrap">
         <canvas id="gymChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- GYM2 -->
+  <div id="panel-gym2" class="panel">
+    <div class="controls">
+      <button class="save-btn" id="gym2-save-btn" onclick="saveGym2View()">Save View</button>
+      <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
+        <span style="font-size:0.75rem;color:#64748b">From</span>
+        <input type="date" id="gym2-from" oninput="renderGym2()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
+        <span style="font-size:0.75rem;color:#64748b">To</span>
+        <input type="date" id="gym2-to" oninput="renderGym2()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
+        <span style="font-size:0.75rem;color:#64748b;margin-left:0.6rem">Chart min</span>
+        <input type="text" inputmode="numeric" id="comp2-min" value="120" oninput="updateComp2Chart()" style="width:4rem;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.9rem;text-align:right;">
+        <span style="font-size:0.75rem;color:#64748b">max</span>
+        <input type="text" inputmode="numeric" id="comp2-max" value="190" oninput="updateComp2Chart()" style="width:4rem;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.9rem;text-align:right;">
+      </span>
+    </div>
+    <div class="summary" id="gym2-cards"></div>
+    <div class="dash-main">
+      <div class="dash-table-wrap" style="flex:0 0 760px;overflow:auto;">
+        <table>
+          <thead><tr>
+            <th style="text-align:left;width:5rem">Period</th>
+            <th>Avg Wt</th>
+            <th>BMI</th>
+            <th>Max Wt</th>
+            <th>Max BMI</th>
+            <th>Bone</th>
+            <th>Muscle</th>
+            <th>Fat</th>
+            <th>Fat%</th>
+            <th>Steps</th>
+            <th>Gym</th>
+            <th>Avg Wt Δ</th>
+            <th>Max Wt Δ</th>
+          </tr></thead>
+          <tbody id="gym2-tbody"></tbody>
+        </table>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="gym2Chart"></canvas>
       </div>
     </div>
   </div>
@@ -800,6 +846,372 @@
       if (btn) { btn.textContent = "Saved ✓"; setTimeout(() => btn.textContent = "Save View", 1500); }
     }
 
+    // ── gym2 tab (same as gym but chart shows month bars even when year collapsed) ──
+    let gym2ExpandedYears  = new Set();
+    let gym2ExpandedMonths = new Set();
+    let gym2ExpandedWeeks  = new Set();
+    let gym2Initialized    = false;
+    let gym2Chart = null;
+
+    function updateComp2Chart() {
+      if (!gym2Chart) return;
+      const mn = parseFloat(document.getElementById("comp2-min").value);
+      const mx = parseFloat(document.getElementById("comp2-max").value);
+      if (!isNaN(mn)) gym2Chart.options.scales.y.min = mn;
+      if (!isNaN(mx)) gym2Chart.options.scales.y.max = mx;
+      gym2Chart.update();
+    }
+
+    function renderGym2() {
+      const today      = todayEST();
+      const weekStart  = weekStartEST();
+      const monthStart = monthStartEST();
+
+      const meByDate = {};
+      const meWeightByDate = {};
+      for (const r of allData.me || []) { meByDate[r.date] = r.steps; meWeightByDate[r.date] = r.weight; }
+
+      const gymFrom = document.getElementById("gym2-from")?.value || "";
+      const gymTo   = document.getElementById("gym2-to")?.value   || "";
+      const weightDataDates = new Set(Object.keys(weightData));
+      const baseEntries = Object.entries(weightData)
+        .filter(([d]) => d <= today && (!gymFrom || d >= gymFrom) && (!gymTo || d <= gymTo))
+        .map(([date, e]) => ({ date, ...e, steps: meByDate[date] ?? null, weight: meWeightByDate[date] ?? e.weight ?? null }));
+      const extraEntries = (allData.me || [])
+        .filter(r => (r.weight != null || r.steps > 0) && !weightDataDates.has(r.date)
+                  && r.date <= today
+                  && gymWeekStart(r.date).slice(0,4) === r.date.slice(0,4)
+                  && (!gymFrom || r.date >= gymFrom)
+                  && (!gymTo   || r.date <= gymTo))
+        .map(r => ({ date: r.date, steps: meByDate[r.date] ?? null, weight: r.weight ?? null }));
+      const allEntries = [...baseEntries, ...extraEntries]
+        .sort((a, b) => a.date < b.date ? -1 : 1);
+
+      const totalGym   = allEntries.filter(e => e.gym).length;
+      const weekGym    = allEntries.filter(e => e.gym && e.date >= weekStart && e.date <= today).length;
+      const monthGym   = allEntries.filter(e => e.gym && e.date >= monthStart && e.date <= today).length;
+      const wtEntries  = allEntries.filter(e => e.weight != null);
+      const latestWt   = wtEntries.length ? wtEntries[wtEntries.length-1].weight : null;
+      const firstWt    = wtEntries.length ? wtEntries[0].weight : null;
+      const cumDelta   = (latestWt != null && firstWt != null) ? latestWt - firstWt : null;
+
+      const weekWtMap = {};
+      for (const e of wtEntries) {
+        const w = gymWeekStart(e.date);
+        (weekWtMap[w] = weekWtMap[w] || []).push(e.weight);
+      }
+      const weekAvgMap = {};
+      for (const [w, ws] of Object.entries(weekWtMap))
+        weekAvgMap[w] = ws.reduce((s,v)=>s+v,0) / ws.length;
+      const sortedWks = Object.keys(weekAvgMap).sort();
+
+      const thisWkAvg = weekAvgMap[weekStart] ?? null;
+      const prevWkIdx = sortedWks.indexOf(weekStart) - 1;
+      const prevWkAvg = prevWkIdx >= 0 ? weekAvgMap[sortedWks[prevWkIdx]] : null;
+      const lossWeek  = (thisWkAvg != null && prevWkAvg != null) ? thisWkAvg - prevWkAvg : null;
+
+      const monthYM = weekStart.slice(0,7);
+      const [mY, mM] = monthYM.split("-").map(Number);
+      const prevMonthYM = `${mM === 1 ? mY - 1 : mY}-${String(mM === 1 ? 12 : mM - 1).padStart(2, "0")}`;
+      const curMonthWkAvgs  = sortedWks.filter(w => w.slice(0,7) === monthYM).map(w => weekAvgMap[w]).filter(v => v != null);
+      const prevMonthWkAvgs = sortedWks.filter(w => w.slice(0,7) === prevMonthYM).map(w => weekAvgMap[w]).filter(v => v != null);
+      const curMonthAvg  = curMonthWkAvgs.length  ? curMonthWkAvgs.reduce((s,v)=>s+v,0)  / curMonthWkAvgs.length  : null;
+      const prevMonthAvg = prevMonthWkAvgs.length ? prevMonthWkAvgs.reduce((s,v)=>s+v,0) / prevMonthWkAvgs.length : null;
+      const lossMon = (curMonthAvg != null && prevMonthAvg != null) ? curMonthAvg - prevMonthAvg : null;
+
+      function fmtDelta(n) {
+        if (n == null) return "—";
+        return (n > 0 ? "+" : "") + Number(n).toLocaleString(undefined,{maximumFractionDigits:1,minimumFractionDigits:1});
+      }
+      function deltaClass(n) { return n == null ? "" : n < 0 ? "green" : n > 0 ? "red" : ""; }
+
+      document.getElementById("gym2-cards").innerHTML = `
+        <div class="card"><div class="card-label">Latest Weight</div><div class="card-value blue">${latestWt != null ? fmt(latestWt,1) : "—"}</div></div>
+        <div class="card"><div class="card-label">Weight Delta</div><div class="card-value ${deltaClass(cumDelta)}">${fmtDelta(cumDelta)}</div></div>
+        <div class="card"><div class="card-label">Week Δ</div><div class="card-value ${deltaClass(lossWeek)}">${fmtDelta(lossWeek)}</div></div>
+        <div class="card"><div class="card-label">Month Δ</div><div class="card-value ${deltaClass(lossMon)}">${fmtDelta(lossMon)}</div></div>
+      `;
+
+      const tree = {};
+      for (const e of allEntries) {
+        const week  = gymWeekStart(e.date);
+        const year  = week.slice(0,4);
+        const month = week.slice(0,7);
+        if (!tree[year])              tree[year] = {};
+        if (!tree[year][month])       tree[year][month] = {};
+        if (!tree[year][month][week]) tree[year][month][week] = [];
+        tree[year][month][week].push(e);
+      }
+
+      if (!gym2Initialized) {
+        gym2Initialized = true;
+        const reloadKey = localStorage.getItem("gym2ViewReload");
+        if (reloadKey) { localStorage.removeItem("gym2ViewReload"); }
+        const saved = reloadKey || localStorage.getItem("gym2View");
+        if (saved) {
+          const s = JSON.parse(saved);
+          if (s.v === 2) {
+            s.years.forEach(y  => gym2ExpandedYears.add(y));
+            (s.months||[]).forEach(m => gym2ExpandedMonths.add(m));
+            s.weeks.forEach(w  => gym2ExpandedWeeks.add(w));
+          } else {
+            localStorage.removeItem("gym2View");
+          }
+        }
+      }
+
+      const allWeekAggs2 = {};
+      for (const y of Object.keys(tree))
+        for (const m of Object.keys(tree[y]))
+          for (const w of Object.keys(tree[y][m]))
+            allWeekAggs2[w] = gymAggregate(tree[y][m][w]);
+      const sortedWeeks = Object.keys(allWeekAggs2).sort();
+
+      const allMonthAggs2 = {};
+      for (const y of Object.keys(tree))
+        for (const m of Object.keys(tree[y])) {
+          const base = gymAggregate(Object.values(tree[y][m]).flat());
+          const wAvgs = Object.keys(tree[y][m]).map(w => allWeekAggs2[w]?.avgWt).filter(v => v != null);
+          base.avgWt = wAvgs.length ? wAvgs.reduce((s,v)=>s+v,0)/wAvgs.length : null;
+          base.bmi = calcBMI(base.avgWt);
+          allMonthAggs2[m] = base;
+        }
+      const sortedMonths = Object.keys(allMonthAggs2).sort();
+
+      const allYearAggs2 = {};
+      for (const y of Object.keys(tree)) {
+        const base = gymAggregate(Object.values(tree[y]).flatMap(m => Object.values(m)).flat());
+        const mAvgs = Object.keys(tree[y]).map(m => allMonthAggs2[m]?.avgWt).filter(v => v != null);
+        base.avgWt = mAvgs.length ? mAvgs.reduce((s,v)=>s+v,0)/mAvgs.length : null;
+        base.bmi = calcBMI(base.avgWt);
+        allYearAggs2[y] = base;
+      }
+      const sortedYears = Object.keys(allYearAggs2).sort();
+
+      const sortedWtEntries = allEntries.filter(e => e.weight != null);
+      const dayWtDelta = {};
+      sortedWtEntries.forEach((e, i) => {
+        dayWtDelta[e.date] = i > 0 ? e.weight - sortedWtEntries[i-1].weight : null;
+      });
+
+      const grand = gymAggregate(allEntries);
+      const years = Object.keys(tree).sort();
+      let html = "";
+      const chartItems = [];
+
+      function weekAvgWt(weeks) {
+        const v = weeks.map(w => allWeekAggs2[w]?.avgWt).filter(x => x != null);
+        return v.length ? v.reduce((s,x)=>s+x,0)/v.length : null;
+      }
+      function weekAvgMax(weeks) {
+        const v = weeks.map(w => allWeekAggs2[w]?.maxWt).filter(x => x != null);
+        return v.length ? Math.max(...v) : null;
+      }
+
+      for (const year of years) {
+        const yOpen = gym2ExpandedYears.has(year);
+        const yEntries = Object.values(tree[year]).flatMap(m => Object.values(m)).flat();
+        const yi = sortedYears.indexOf(year);
+        const prevYearAgg = yi > 0 ? allYearAggs2[sortedYears[yi-1]] : null;
+        const yAvgDelta = (allYearAggs2[year]?.avgWt != null && prevYearAgg?.avgWt != null) ? allYearAggs2[year].avgWt - prevYearAgg.avgWt : null;
+        const yMaxDelta = (allYearAggs2[year]?.maxWt != null && prevYearAgg?.maxWt != null) ? allYearAggs2[year].maxWt - prevYearAgg.maxWt : null;
+        html += `<tr class="row-year${yOpen?" open":""}" onclick="toggleGym2Year('${year}')">
+          <td><span class="arrow">${yOpen?"▼":"▶"}</span>${year}</td>${gymYearCols(yEntries, yAvgDelta, yMaxDelta, yOpen)}</tr>`;
+        if (!yOpen) {
+          // Chart shows month-level bars even when year is collapsed
+          for (const month of Object.keys(tree[year]).sort()) {
+            const mEntries = Object.values(tree[year][month]).flat();
+            const mAgg = gymAggregate(mEntries);
+            const [,mm] = month.split("-");
+            const mLabel = new Date(2000,+mm-1).toLocaleString("default",{month:"short"});
+            chartItems.push({ cy: year, cm: mLabel, cw: null, weeks: Object.keys(tree[year][month]), bone: mAgg.bone??null, muscle: mAgg.muscle??null, fat: mAgg.fat??null });
+          }
+          continue;
+        }
+
+        for (const month of Object.keys(tree[year]).sort()) {
+          const mEntries = Object.values(tree[year][month]).flat();
+          const mAgg = gymAggregate(mEntries);
+          const mOpen = gym2ExpandedMonths.has(month);
+          const [,mm] = month.split("-");
+          const mLabel = new Date(2000,+mm-1).toLocaleString("default",{month:"short"});
+          const mWeekCount = Object.keys(tree[year][month]).length;
+          const mi = sortedMonths.indexOf(month);
+          const prevMonthAgg = mi > 0 ? allMonthAggs2[sortedMonths[mi-1]] : null;
+          const mEx = {
+            sessPerWk: mWeekCount ? mAgg.gymCount / mWeekCount : null,
+            avgWtDelta: (mAgg.avgWt != null && prevMonthAgg?.avgWt != null) ? mAgg.avgWt - prevMonthAgg.avgWt : null,
+            maxWtDelta: (mAgg.maxWt != null && prevMonthAgg?.maxWt != null) ? mAgg.maxWt - prevMonthAgg.maxWt : null,
+            hideComp: mOpen,
+          };
+          html += `<tr class="row-month${mOpen?" open":""}" onclick="toggleGym2Month('${month}')">
+            <td><span class="arrow">${mOpen?"▼":"▶"}</span>${mLabel}</td>${gymCols(mAgg, mEx)}</tr>`;
+          if (!mOpen) {
+            chartItems.push({ cy: year, cm: mLabel, cw: null, weeks: Object.keys(tree[year][month]), bone: mAgg.bone??null, muscle: mAgg.muscle??null, fat: mAgg.fat??null });
+            continue;
+          }
+
+          for (const week of Object.keys(tree[year][month]).sort()) {
+            const wEntries = tree[year][month][week];
+            const wAgg = allWeekAggs2[week];
+            const wOpen = gym2ExpandedWeeks.has(week);
+            const [wy,wm,wd] = week.split("-").map(Number);
+            const wLabel = new Date(wy,wm-1,wd).toLocaleString("default",{month:"short",day:"numeric"});
+            const wi = sortedWeeks.indexOf(week);
+            const prevAgg = wi > 0 ? allWeekAggs2[sortedWeeks[wi-1]] : null;
+            const wEx = {
+              sessPerWk: wAgg.gymCount,
+              avgWtDelta: (wAgg.avgWt != null && prevAgg?.avgWt != null) ? wAgg.avgWt - prevAgg.avgWt : null,
+              maxWtDelta: (wAgg.maxWt != null && prevAgg?.maxWt != null) ? wAgg.maxWt - prevAgg.maxWt : null,
+              hideComp: wOpen,
+            };
+            html += `<tr class="row-week${wOpen?" open":""}" onclick="toggleGym2Week('${week}')">
+              <td><span class="arrow">${wOpen?"▼":"▶"}</span>${wLabel}</td>${gymCols(wAgg, wEx)}</tr>`;
+            if (!wOpen) {
+              chartItems.push({ cy: year, cm: mLabel, cw: wLabel, weeks: [week], bone: wAgg.bone??null, muscle: wAgg.muscle??null, fat: wAgg.fat??null });
+            }
+            if (!wOpen) continue;
+
+            for (const e of wEntries) {
+              const [dy,dm,dd] = e.date.split("-").map(Number);
+              const dLabel = new Date(dy,dm-1,dd).toLocaleString("default",{month:"short",day:"numeric"});
+              const dDelta = dayWtDelta[e.date] ?? null;
+              html += `<tr class="row-day">
+                <td><span class="arrow"></span>${dLabel}</td>${gymCols(gymAggregate([e]), { gymLabel: e.gym || "", avgWtDelta: dDelta, maxWtDelta: dDelta })}</tr>`;
+              chartItems.push({
+                cy: year, cm: mLabel, cw: wLabel, cd: dLabel,
+                avgWt: e.weight ?? null, maxWt: e.weight ?? null, sess: null,
+                bone: e.bone ?? null, muscle: e.muscle ?? null, fat: e.fat ?? null,
+                weeks: [week],
+              });
+            }
+          }
+        }
+      }
+      html += `<tr class="grand-total"><td>Grand Total</td>${gymCols(grand)}</tr>`;
+      document.getElementById("gym2-tbody").innerHTML = html;
+
+      chartItems.forEach((item, i) => {
+        const prev = i > 0 ? chartItems[i-1] : null;
+        if (item.avgWt === undefined) { item.avgWt = weekAvgWt(item.weeks); item.maxWt = weekAvgMax(item.weeks); }
+        item.label = [
+          item.cd || "",
+          item.cw && item.cw !== prev?.cw ? item.cw : "",
+          item.cm && item.cm !== prev?.cm ? item.cm : "",
+          item.cy && item.cy !== prev?.cy ? item.cy : "",
+        ];
+      });
+      const chartLabels = chartItems.map(i => i.label);
+      const avgWts = chartItems.map(i => i.avgWt);
+      const maxWts = chartItems.map(i => i.maxWt);
+      const compMin = parseFloat(document.getElementById("comp2-min").value) || 120;
+      const compMax = parseFloat(document.getElementById("comp2-max").value) || 190;
+      const sessData = chartItems.map(i => {
+        if (i.sess !== undefined) return i.sess;
+        const total = i.weeks.reduce((s,w) => s + (allWeekAggs2[w]?.gymCount || 0), 0);
+        return i.weeks.length ? total / i.weeks.length : null;
+      });
+      const gym2TickPlugin = {
+        id: 'gym2Ticks',
+        afterDraw(chart) {
+          const xScale = chart.scales.x;
+          if (!xScale) return;
+          const lbs = chart.data.labels;
+          if (!lbs || !lbs.length) return;
+          const axisTop = chart.chartArea.bottom;
+          const axisBot = xScale.bottom;
+          const rowH    = (axisBot - axisTop) / 4;
+          const ctx     = chart.ctx;
+          ctx.save();
+          ctx.strokeStyle = '#475569';
+          ctx.lineWidth   = 1;
+          lbs.forEach((lbl, idx) => {
+            let depth = 4;
+            if (Array.isArray(lbl)) {
+              if      (lbl[0] !== '') depth = 1;
+              else if (lbl[1] !== '') depth = 2;
+              else if (lbl[2] !== '') depth = 3;
+            }
+            const x = xScale.getPixelForValue(idx - 0.5);
+            ctx.beginPath();
+            ctx.moveTo(x, axisTop);
+            ctx.lineTo(x, axisTop + rowH * depth);
+            ctx.stroke();
+          });
+          ctx.restore();
+        }
+      };
+
+      if (gym2Chart) gym2Chart.destroy();
+      gym2Chart = new Chart(document.getElementById("gym2Chart"), {
+        plugins: [gym2TickPlugin],
+        data: {
+          labels: chartLabels,
+          datasets: [
+            { type: "bar",  label: "Gym",    data: sessData,                        yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderWidth: 0, barPercentage: 1.0, categoryPercentage: 1.0, order: 10 },
+            { type: "bar",  label: "Bone",   data: chartItems.map(i => i.bone),   backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
+            { type: "bar",  label: "Muscle", data: chartItems.map(i => i.muscle), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
+            { type: "bar",  label: "Fat",    data: chartItems.map(i => i.fat),    backgroundColor: "rgba(244,114,182,0.80)", stack: "comp", barPercentage: 0.5, order: 2 },
+            { type: "line", label: "Avg Wt", data: avgWts, borderColor: "rgba(255,255,255,0.85)", backgroundColor: "transparent", borderWidth: 2, pointRadius: 2, tension: 0.3, order: 1 },
+            { type: "line", label: "Max Wt", data: maxWts, borderColor: "rgba(148,163,184,0.7)",  backgroundColor: "transparent", borderWidth: 1.5, pointRadius: 2, tension: 0.3, borderDash: [4,3], order: 1 },
+          ],
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          datasets: { bar: { grouped: false } },
+          plugins: {
+            legend: { labels: { color: "#94a3b8" } },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}` } },
+          },
+          scales: {
+            x: { ticks: { color: "#64748b", maxRotation: 45 }, grid: { color: "#1e293b", drawTicks: false } },
+            y:  { min: compMin, max: compMax, ticks: { color: "#64748b", callback: v => fmt(v,1) }, grid: { color: "#334155" } },
+            y2: { min: 0, max: 7, position: "right", ticks: { color: "#64748b", stepSize: 1 }, grid: { drawOnChartArea: false } },
+          },
+        },
+      });
+    }
+
+    function toggleGym2Year(year) {
+      if (gym2ExpandedYears.has(year)) {
+        gym2ExpandedYears.delete(year);
+        for (const m of [...gym2ExpandedMonths]) if (m.startsWith(year)) {
+          gym2ExpandedMonths.delete(m);
+          for (const w of [...gym2ExpandedWeeks]) if (w.startsWith(m)) gym2ExpandedWeeks.delete(w);
+        }
+      } else {
+        gym2ExpandedYears.add(year);
+        for (const m of [...gym2ExpandedMonths]) if (m.startsWith(year)) {
+          gym2ExpandedMonths.delete(m);
+          for (const w of [...gym2ExpandedWeeks]) if (w.startsWith(m)) gym2ExpandedWeeks.delete(w);
+        }
+      }
+      renderGym2();
+    }
+    function toggleGym2Month(month) {
+      if (gym2ExpandedMonths.has(month)) {
+        gym2ExpandedMonths.delete(month);
+        for (const w of [...gym2ExpandedWeeks]) if (w.startsWith(month)) gym2ExpandedWeeks.delete(w);
+      } else { gym2ExpandedMonths.add(month); }
+      renderGym2();
+    }
+    function toggleGym2Week(week) {
+      gym2ExpandedWeeks.has(week) ? gym2ExpandedWeeks.delete(week) : gym2ExpandedWeeks.add(week);
+      renderGym2();
+    }
+    function saveGym2View() {
+      localStorage.setItem("gym2View", JSON.stringify({
+        v: 2,
+        years:  [...gym2ExpandedYears],
+        months: [...gym2ExpandedMonths],
+        weeks:  [...gym2ExpandedWeeks],
+      }));
+      const btn = document.getElementById("gym2-save-btn");
+      if (btn) { btn.textContent = "Saved ✓"; setTimeout(() => btn.textContent = "Save View", 1500); }
+    }
+
     // ── init ──────────────────────────────────────────────────────────────────
     async function init() {
       const cacheBust = "?t=" + Date.now();
@@ -888,6 +1300,7 @@
 if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    renderRaw("mom");
       if (name==="weight") renderWeight();
       if (name==="gym")    renderGym();
+      if (name==="gym2")   renderGym2();
     }
 
     // ── EST date helpers ──────────────────────────────────────────────────────
