@@ -620,7 +620,7 @@
             const [,mm] = month.split("-");
             const mLabel = new Date(2000,+mm-1).toLocaleString("default",{month:"short"});
             chartItems.push({
-              cy: year, cm: mLabel, cw: null,
+              cy: year, cm: null, cw: null,
               weeks: Object.keys(tree[year][month]),
               bone: mAgg.bone??null, muscle: mAgg.muscle??null, fat: mAgg.fat??null,
               avgWt: mi === 0 ? (yAgg?.avgWt??null) : null,
