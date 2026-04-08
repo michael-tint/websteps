@@ -609,9 +609,25 @@
         html += `<tr class="row-year${yOpen?" open":""}" onclick="toggleGymYear('${year}')">
           <td><span class="arrow">${yOpen?"▼":"▶"}</span>${year}</td>${gymYearCols(yEntries, yAvgDelta, yMaxDelta, yOpen)}</tr>`;
         if (!yOpen) {
-          const yWeeks = Object.values(tree[year]).flatMap(m => Object.keys(m));
+          const sortedYearMonths = Object.keys(tree[year]).sort();
           const yAgg = allYearAggs[year];
-          chartItems.push({ cy: year, cm: null, cw: null, weeks: yWeeks, bone: yAgg?.bone??null, muscle: yAgg?.muscle??null, fat: yAgg?.fat??null });
+          const yWeeks = sortedYearMonths.flatMap(m => Object.keys(tree[year][m]));
+          const ySessTotal = yWeeks.reduce((s,w) => s + (allWeekAggs[w]?.gymCount || 0), 0);
+          const ySess = yWeeks.length ? ySessTotal / yWeeks.length : null;
+          sortedYearMonths.forEach((month, mi) => {
+            const mEntries = Object.values(tree[year][month]).flat();
+            const mAgg = gymAggregate(mEntries);
+            const [,mm] = month.split("-");
+            const mLabel = new Date(2000,+mm-1).toLocaleString("default",{month:"short"});
+            chartItems.push({
+              cy: year, cm: mLabel, cw: null,
+              weeks: Object.keys(tree[year][month]),
+              bone: mAgg.bone??null, muscle: mAgg.muscle??null, fat: mAgg.fat??null,
+              avgWt: mi === 0 ? (yAgg?.avgWt??null) : null,
+              maxWt: mi === 0 ? (yAgg?.maxWt??null) : null,
+              sess:  mi === 0 ? ySess : null,
+            });
+          });
           continue;
         }
 
