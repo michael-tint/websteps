@@ -614,18 +614,22 @@
           const yWeeks = sortedYearMonths.flatMap(m => Object.keys(tree[year][m]));
           const ySessTotal = yWeeks.reduce((s,w) => s + (allWeekAggs[w]?.gymCount || 0), 0);
           const ySess = yWeeks.length ? ySessTotal / yWeeks.length : null;
-          sortedYearMonths.forEach((month, mi) => {
+          let firstPushed = false;
+          sortedYearMonths.forEach((month) => {
             const mEntries = Object.values(tree[year][month]).flat();
             const mAgg = gymAggregate(mEntries);
-            const [,mm] = month.split("-");
-            const mLabel = new Date(2000,+mm-1).toLocaleString("default",{month:"short"});
+            const hasBMF = mAgg.bone != null || mAgg.muscle != null || mAgg.fat != null;
+            if (!hasBMF && firstPushed) return;
+            const isFirst = !firstPushed;
+            firstPushed = true;
             chartItems.push({
               cy: year, cm: null, cw: null,
               weeks: Object.keys(tree[year][month]),
               bone: mAgg.bone??null, muscle: mAgg.muscle??null, fat: mAgg.fat??null,
-              avgWt: mi === 0 ? (yAgg?.avgWt??null) : null,
-              maxWt: mi === 0 ? (yAgg?.maxWt??null) : null,
+              avgWt: isFirst ? (yAgg?.avgWt??null) : null,
+              maxWt: isFirst ? (yAgg?.maxWt??null) : null,
               sess:  ySess,
+              noTick: !isFirst,
             });
           });
           continue;
@@ -730,6 +734,7 @@
           ctx.strokeStyle = '#475569';
           ctx.lineWidth   = 1;
           lbs.forEach((lbl, idx) => {
+            if (chartItems[idx]?.noTick) return;
             let depth = 4; // year default
             if (Array.isArray(lbl)) {
               if      (lbl[0] !== '') depth = 1; // day
