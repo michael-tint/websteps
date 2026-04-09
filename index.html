@@ -624,6 +624,7 @@
             firstPushed = true;
             chartItems.push({
               cy: year, cm: null, cw: null,
+              isYearCollapsed: true,
               weeks: Object.keys(tree[year][month]),
               bone: mAgg.bone??null, muscle: mAgg.muscle??null, fat: mAgg.fat??null,
               avgWt: isFirst ? (yAgg?.avgWt??null) : null,
@@ -708,23 +709,28 @@
           item.cy && item.cy !== prev?.cy ? item.cy : "",
         ];
       });
-      const chartLabels = chartItems.map(i => i.label);
-      const avgWts = chartItems.map(i => i.avgWt);
-      const maxWts = chartItems.map(i => i.maxWt);
+      // Assign virtual x positions: collapsed-year items get 0.5 units, others get 1.0
+      let cumVirtualX = 0;
+      chartItems.forEach(item => {
+        const slotWidth = item.isYearCollapsed ? 0.5 : 1.0;
+        item.virtualX = cumVirtualX + slotWidth / 2;
+        cumVirtualX += slotWidth;
+      });
+      const avgWts = chartItems.map(i => ({x: i.virtualX, y: i.avgWt}));
+      const maxWts = chartItems.map(i => ({x: i.virtualX, y: i.maxWt}));
       const compMin = parseFloat(document.getElementById("comp-min").value) || 120;
       const compMax = parseFloat(document.getElementById("comp-max").value) || 190;
       const sessData = chartItems.map(i => {
-        if (i.sess !== undefined) return i.sess;
-        const total = i.weeks.reduce((s,w) => s + (allWeekAggs[w]?.gymCount || 0), 0);
-        return i.weeks.length ? total / i.weeks.length : null;
+        let y;
+        if (i.sess !== undefined) y = i.sess;
+        else { const t = i.weeks.reduce((s,w) => s+(allWeekAggs[w]?.gymCount||0),0); y = i.weeks.length ? t/i.weeks.length : null; }
+        return {x: i.virtualX, y};
       });
       const gymTickPlugin = {
         id: 'gymTicks',
         afterDraw(chart) {
           const xScale = chart.scales.x;
-          if (!xScale) return;
-          const lbs = chart.data.labels;
-          if (!lbs || !lbs.length) return;
+          if (!xScale || !chartItems.length) return;
           const axisTop = chart.chartArea.bottom;
           const axisBot = xScale.bottom;
           const rowH    = (axisBot - axisTop) / 4;
@@ -732,14 +738,16 @@
           ctx.save();
           ctx.strokeStyle = '#475569';
           ctx.lineWidth   = 1;
-          lbs.forEach((lbl, idx) => {
-            let depth = 4; // year default
+          chartItems.forEach(item => {
+            const lbl = item.label;
+            let depth = 4;
             if (Array.isArray(lbl)) {
-              if      (lbl[0] !== '') depth = 1; // day
-              else if (lbl[1] !== '') depth = 2; // week
-              else if (lbl[2] !== '') depth = 3; // month
+              if      (lbl[0] !== '') depth = 1;
+              else if (lbl[1] !== '') depth = 2;
+              else if (lbl[2] !== '') depth = 3;
             }
-            const x = xScale.getPixelForValue(idx - 0.5);
+            const slotHalf = item.isYearCollapsed ? 0.25 : 0.5;
+            const x = xScale.getPixelForValue(item.virtualX - slotHalf);
             ctx.beginPath();
             ctx.moveTo(x, axisTop);
             ctx.lineTo(x, axisTop + rowH * depth);
@@ -753,12 +761,11 @@
       gymChart = new Chart(document.getElementById("gymChart"), {
         plugins: [gymTickPlugin],
         data: {
-          labels: chartLabels,
           datasets: [
             { type: "bar",  label: "Gym", data: sessData, yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderWidth: 0, barPercentage: 1.0, categoryPercentage: 1.0, order: 10 },
-            { type: "bar",  label: "Bone",   data: chartItems.map(i => i.bone),   backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
-            { type: "bar",  label: "Muscle", data: chartItems.map(i => i.muscle), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
-            { type: "bar",  label: "Fat",    data: chartItems.map(i => i.fat),    backgroundColor: "rgba(244,114,182,0.80)", stack: "comp", barPercentage: 0.5, order: 2 },
+            { type: "bar",  label: "Bone",   data: chartItems.map(i => ({x: i.virtualX, y: i.bone})),   backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
+            { type: "bar",  label: "Muscle", data: chartItems.map(i => ({x: i.virtualX, y: i.muscle})), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
+            { type: "bar",  label: "Fat",    data: chartItems.map(i => ({x: i.virtualX, y: i.fat})),    backgroundColor: "rgba(244,114,182,0.80)", stack: "comp", barPercentage: 0.5, order: 2 },
             { type: "line", label: "Avg Wt", data: avgWts, borderColor: "rgba(255,255,255,0.85)", backgroundColor: "transparent", borderWidth: 2, pointRadius: 2, tension: 0.3, order: 1 },
             { type: "line", label: "Max Wt", data: maxWts, borderColor: "rgba(148,163,184,0.7)",  backgroundColor: "transparent", borderWidth: 1.5, pointRadius: 2, tension: 0.3, borderDash: [4,3], order: 1 },
           ],
@@ -773,7 +780,12 @@
             tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}` } },
           },
           scales: {
-            x: { ticks: { color: "#64748b", maxRotation: 45 }, grid: { color: "#1e293b", drawTicks: false } },
+            x: {
+              type: 'linear',
+              afterBuildTicks(scale) { scale.ticks = chartItems.map(i => ({value: i.virtualX})); },
+              ticks: { color: "#64748b", maxRotation: 45, callback(v, i) { return chartItems[i]?.label ?? ''; } },
+              grid: { color: "#1e293b", drawTicks: false },
+            },
             y:  { min: compMin, max: compMax, ticks: { color: "#64748b", callback: v => fmt(v,1) }, grid: { color: "#334155" } },
             y2: { min: 0, max: 7, position: "right", ticks: { color: "#64748b", stepSize: 1 }, grid: { drawOnChartArea: false } },
           },
