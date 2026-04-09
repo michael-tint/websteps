@@ -857,7 +857,9 @@
               const slotWidth = item.isYearCollapsed ? 1/3 : 1.0;
               // In collapsed years BMF bars fill the full slot width; expanded keeps barPercentage
               const fillFraction = item.isYearCollapsed ? 1.0 : (ds.barPercentage ?? 1.0);
-              el.width = slotWidth * pxPerUnit * fillFraction;
+              // +1 on Gym bars for expanded items closes sub-pixel gaps between adjacent bars
+              const gapFill = (ds.label === 'Gym' && !item.isYearCollapsed) ? 1 : 0;
+              el.width = slotWidth * pxPerUnit * fillFraction + gapFill;
             });
           });
         }
