@@ -625,7 +625,7 @@
               bmfMonths.push({month, mAgg});
           }
           // Store year-level weight for centering the weight line
-          collapsedYearWeights.set(year, {avgWt: yAgg?.avgWt??null, maxWt: yAgg?.maxWt??null});
+          collapsedYearWeights.set(year, {avgWt: yAgg?.avgWt??null, maxWt: yAgg?.maxWt??null, sess: ySess});
           // Always push exactly 6 half-width slots: phantom, 4× BMF (or empty), phantom
           const phantom = {cy: year, cm: null, cw: null, isYearCollapsed: true, isPhantom: true,
                            weeks: [], bone: null, muscle: null, fat: null,
@@ -778,6 +778,27 @@
       });
       const gymTickPlugin = {
         id: 'gymTicks',
+        beforeDatasetsDraw(chart) {
+          const xScale = chart.scales.x;
+          const y2Scale = chart.scales.y2;
+          if (!xScale || !y2Scale || !collapsedYearXs.size) return;
+          const ctx = chart.ctx;
+          const {left, top, right, bottom} = chart.chartArea;
+          ctx.save();
+          ctx.rect(left, top, right - left, bottom - top);
+          ctx.clip();
+          ctx.fillStyle = 'rgba(74,222,128,0.13)';
+          collapsedYearXs.forEach((xs, year) => {
+            const wt = collapsedYearWeights.get(year);
+            if (!wt || wt.sess == null) return;
+            const leftPx  = xScale.getPixelForValue(xs[0] - 1/6);
+            const rightPx = xScale.getPixelForValue(xs[xs.length - 1] + 1/6);
+            const barTop  = y2Scale.getPixelForValue(wt.sess);
+            const barBase = y2Scale.getPixelForValue(0);
+            ctx.fillRect(leftPx, barTop, rightPx - leftPx, barBase - barTop);
+          });
+          ctx.restore();
+        },
         afterDraw(chart) {
           const xScale = chart.scales.x;
           if (!xScale || !chartItems.length) return;
@@ -832,6 +853,7 @@
             meta.data.forEach((el, i) => {
               const item = chartItems[i];
               if (!item) return;
+              if (ds.label === 'Gym' && item.isYearCollapsed) return; // drawn manually as fillRect
               const slotWidth = item.isYearCollapsed ? 1/3 : 1.0;
               // In collapsed years BMF bars fill the full slot width; expanded keeps barPercentage
               const fillFraction = item.isYearCollapsed ? 1.0 : (ds.barPercentage ?? 1.0);
@@ -846,7 +868,7 @@
         plugins: [gymTickPlugin, gymBarWidthPlugin],
         data: {
           datasets: [
-            { type: "bar",  label: "Gym", data: sessData, yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderWidth: 0, barPercentage: 1.0, categoryPercentage: 1.0, order: 10 },
+            { type: "bar",  label: "Gym", data: sessData, yAxisID: "y2", backgroundColor: (ctx) => { const item = chartItems[ctx.dataIndex]; return item?.isYearCollapsed ? 'rgba(0,0,0,0)' : 'rgba(74,222,128,0.13)'; }, borderWidth: 0, barPercentage: 1.0, categoryPercentage: 1.0, order: 10 },
             { type: "bar",  label: "Bone",   data: chartItems.map(i => ({x: i.virtualX, y: i.bone})),   backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
             { type: "bar",  label: "Muscle", data: chartItems.map(i => ({x: i.virtualX, y: i.muscle})), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
             { type: "bar",  label: "Fat",    data: chartItems.map(i => ({x: i.virtualX, y: i.fat})),    backgroundColor: "rgba(244,114,182,0.80)", stack: "comp", barPercentage: 0.5, order: 2 },
