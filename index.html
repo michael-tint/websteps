@@ -891,7 +891,7 @@
                 scale.ticks = [...itemTicks, ...centerTicks].sort((a, b) => a.value - b.value);
               },
               ticks: { color: "#64748b", maxRotation: 0, minRotation: 0, autoSkip: false, callback(v) { return tickLabelMap.get(v) ?? ''; } },
-              grid: { display: false, drawTicks: false },
+              grid: { color: 'rgba(0,0,0,0)', drawTicks: false },
             },
             y:  { min: compMin, max: compMax, ticks: { color: "#64748b", callback: v => fmt(v,1) }, grid: { color: "#334155" } },
             y2: { min: 0, max: 7, position: "right", ticks: { color: "#64748b", stepSize: 1 }, grid: { drawOnChartArea: false } },
