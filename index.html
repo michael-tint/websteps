@@ -837,7 +837,6 @@
       const gymBarWidthPlugin = {
         id: 'gymBarWidth',
         beforeDatasetsDraw(chart) {
-          if (!chartItems.some(i => i.isYearCollapsed)) return;
           const xScale = chart.scales.x;
           const pxPerUnit = Math.abs(xScale.getPixelForValue(1) - xScale.getPixelForValue(0));
           chart.data.datasets.forEach((ds, di) => {
