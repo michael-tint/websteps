@@ -815,12 +815,6 @@
             if (item.isYearCollapsed && prev?.isYearCollapsed && prev.cy === item.cy) return;
             const slotHalf = item.isYearCollapsed ? 1/6 : 0.5;
             const x = xScale.getPixelForValue(item.virtualX - slotHalf);
-            // Grid line through the chart area
-            ctx.beginPath();
-            ctx.strokeStyle = '#1e293b';
-            ctx.moveTo(x, chartTop);
-            ctx.lineTo(x, axisTop);
-            ctx.stroke();
             // Hierarchical tick divider into the axis label area
             const lbl = item.label;
             let depth = 4;
