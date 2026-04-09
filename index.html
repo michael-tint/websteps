@@ -631,7 +631,7 @@
                            weeks: [], bone: null, muscle: null, fat: null,
                            avgWt: null, maxWt: null, sess: ySess};
           chartItems.push({...phantom});
-          for (let s = 0; s < 4; s++) {
+          for (let s = 0; s < Math.min(4, sortedYearMonths.length); s++) {
             const bm = bmfMonths[s];
             chartItems.push({
               cy: year, cm: null, cw: null, isYearCollapsed: true,
