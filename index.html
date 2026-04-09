@@ -619,7 +619,7 @@
             const mEntries = Object.values(tree[year][month]).flat();
             const mAgg = gymAggregate(mEntries);
             const hasBMF = mAgg.bone != null || mAgg.muscle != null || mAgg.fat != null;
-            if (!hasBMF && firstPushed) return;
+            if (!hasBMF) return;
             const isFirst = !firstPushed;
             firstPushed = true;
             chartItems.push({
@@ -741,8 +741,21 @@
         }
       });
 
-      const avgWts = chartItems.map(i => ({x: i.virtualX, y: i.avgWt}));
-      const maxWts = chartItems.map(i => ({x: i.virtualX, y: i.maxWt}));
+      // Weight lines: one centered point per collapsed year, individual points for expanded items.
+      const avgWts = [], maxWts = [];
+      const seenWtYears = new Set();
+      chartItems.forEach(item => {
+        if (!item.isYearCollapsed) {
+          avgWts.push({x: item.virtualX, y: item.avgWt});
+          maxWts.push({x: item.virtualX, y: item.maxWt});
+        } else if (!seenWtYears.has(item.cy)) {
+          seenWtYears.add(item.cy);
+          const xs = collapsedYearXs.get(item.cy);
+          const cx = xs && xs.length > 1 ? (xs[0] + xs[xs.length - 1]) / 2 : item.virtualX;
+          avgWts.push({x: cx, y: item.avgWt});
+          maxWts.push({x: cx, y: item.maxWt});
+        }
+      });
       const compMin = parseFloat(document.getElementById("comp-min").value) || 120;
       const compMax = parseFloat(document.getElementById("comp-max").value) || 190;
       const sessData = chartItems.map(i => {
@@ -815,8 +828,8 @@
             { type: "bar",  label: "Bone",   data: chartItems.map(i => ({x: i.virtualX, y: i.bone})),   backgroundColor: "rgba(251,191,36,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
             { type: "bar",  label: "Muscle", data: chartItems.map(i => ({x: i.virtualX, y: i.muscle})), backgroundColor: "rgba(96,165,250,0.80)",  stack: "comp", barPercentage: 0.5, order: 2 },
             { type: "bar",  label: "Fat",    data: chartItems.map(i => ({x: i.virtualX, y: i.fat})),    backgroundColor: "rgba(244,114,182,0.80)", stack: "comp", barPercentage: 0.5, order: 2 },
-            { type: "line", label: "Avg Wt", data: avgWts, borderColor: "rgba(255,255,255,0.85)", backgroundColor: "transparent", borderWidth: 2, pointRadius: 2, tension: 0.3, order: 1 },
-            { type: "line", label: "Max Wt", data: maxWts, borderColor: "rgba(148,163,184,0.7)",  backgroundColor: "transparent", borderWidth: 1.5, pointRadius: 2, tension: 0.3, borderDash: [4,3], order: 1 },
+            { type: "line", label: "Avg Wt", data: avgWts, borderColor: "rgba(255,255,255,0.85)", backgroundColor: "transparent", borderWidth: 2, pointRadius: 2, tension: 0.3, spanGaps: true, order: 1 },
+            { type: "line", label: "Max Wt", data: maxWts, borderColor: "rgba(148,163,184,0.7)",  backgroundColor: "transparent", borderWidth: 1.5, pointRadius: 2, tension: 0.3, spanGaps: true, borderDash: [4,3], order: 1 },
           ],
         },
         options: {
