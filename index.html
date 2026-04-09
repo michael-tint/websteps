@@ -738,7 +738,10 @@
           ctx.save();
           ctx.strokeStyle = '#475569';
           ctx.lineWidth   = 1;
-          chartItems.forEach(item => {
+          chartItems.forEach((item, idx) => {
+            const prev = idx > 0 ? chartItems[idx - 1] : null;
+            // No divider between months within the same collapsed year
+            if (item.isYearCollapsed && prev?.isYearCollapsed && prev.cy === item.cy) return;
             const lbl = item.label;
             let depth = 4;
             if (Array.isArray(lbl)) {
