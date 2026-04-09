@@ -723,7 +723,7 @@
       // Assign virtual x positions: collapsed-year items get 0.5 units, others get 1.0
       let cumVirtualX = 0;
       chartItems.forEach(item => {
-        const slotWidth = item.isYearCollapsed ? 0.5 : 1.0;
+        const slotWidth = item.isYearCollapsed ? 1/3 : 1.0;
         item.virtualX = cumVirtualX + slotWidth / 2;
         cumVirtualX += slotWidth;
       });
@@ -799,7 +799,7 @@
               else if (lbl[1] !== '') depth = 2;
               else if (lbl[2] !== '') depth = 3;
             }
-            const slotHalf = item.isYearCollapsed ? 0.25 : 0.5;
+            const slotHalf = item.isYearCollapsed ? 1/6 : 0.5;
             const x = xScale.getPixelForValue(item.virtualX - slotHalf);
             ctx.beginPath();
             ctx.moveTo(x, axisTop);
@@ -821,11 +821,13 @@
           chart.data.datasets.forEach((ds, di) => {
             const meta = chart.getDatasetMeta(di);
             if (meta.type !== 'bar') return;
-            const fillFraction = ds.barPercentage ?? 1.0;
             meta.data.forEach((el, i) => {
               const item = chartItems[i];
               if (!item) return;
-              el.width = (item.isYearCollapsed ? 0.5 : 1.0) * pxPerUnit * fillFraction;
+              const slotWidth = item.isYearCollapsed ? 1/3 : 1.0;
+              // In collapsed years BMF bars fill the full slot width; expanded keeps barPercentage
+              const fillFraction = item.isYearCollapsed ? 1.0 : (ds.barPercentage ?? 1.0);
+              el.width = slotWidth * pxPerUnit * fillFraction;
             });
           });
         }
@@ -861,7 +863,7 @@
                 const centerTicks = [...yearCenterValues].map(v => ({value: v}));
                 scale.ticks = [...itemTicks, ...centerTicks].sort((a, b) => a.value - b.value);
               },
-              ticks: { color: "#64748b", maxRotation: 45, callback(v) { return tickLabelMap.get(v) ?? ''; } },
+              ticks: { color: "#64748b", maxRotation: 45, autoSkip: false, callback(v) { return tickLabelMap.get(v) ?? ''; } },
               grid: { color(ctx) { return yearCenterValues.has(ctx.tick?.value) ? 'transparent' : '#1e293b'; }, drawTicks: false },
             },
             y:  { min: compMin, max: compMax, ticks: { color: "#64748b", callback: v => fmt(v,1) }, grid: { color: "#334155" } },
