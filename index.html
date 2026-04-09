@@ -830,9 +830,8 @@
             // Hierarchical tick divider into the axis label area
             const lbl = item.label;
             let depth = 4;
-            if (Array.isArray(lbl)) {
-              if      (lbl[0] !== '') depth = 1;
-              else if (lbl[1] !== '') depth = 2;
+            if (Array.isArray(lbl) && lbl[2] === '' && lbl[3] === '') {
+              depth = lbl[1] !== '' ? 2 : 1;
             }
             ctx.beginPath();
             ctx.strokeStyle = '#475569';
@@ -840,6 +839,17 @@
             ctx.lineTo(x, axisTop + rowH * depth);
             ctx.stroke();
           });
+          // Closing tick at the right edge of the last item
+          const lastItem = chartItems[chartItems.length - 1];
+          if (lastItem) {
+            const slotHalf = lastItem.isYearCollapsed ? 1/6 : 0.5;
+            const x = xScale.getPixelForValue(lastItem.virtualX + slotHalf);
+            ctx.beginPath();
+            ctx.strokeStyle = '#475569';
+            ctx.moveTo(x, axisTop);
+            ctx.lineTo(x, axisTop + rowH * 4);
+            ctx.stroke();
+          }
           ctx.restore();
         }
       };
