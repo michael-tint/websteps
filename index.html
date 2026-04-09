@@ -629,7 +629,7 @@
           // Always push exactly 6 half-width slots: phantom, 4× BMF (or empty), phantom
           const phantom = {cy: year, cm: null, cw: null, isYearCollapsed: true, isPhantom: true,
                            weeks: [], bone: null, muscle: null, fat: null,
-                           avgWt: null, maxWt: null, sess: null};
+                           avgWt: null, maxWt: null, sess: ySess};
           chartItems.push({...phantom});
           for (let s = 0; s < 4; s++) {
             const bm = bmfMonths[s];
