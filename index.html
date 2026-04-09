@@ -751,9 +751,6 @@
           yearCenterValues.add(cx);
         }
       });
-      // Grid lines to suppress: year-center ticks + all non-first slots within collapsed years
-      const suppressedGridValues = new Set(yearCenterValues);
-      collapsedYearXs.forEach(xs => xs.slice(1).forEach(x => suppressedGridValues.add(x)));
 
       // Weight lines: one centered point per collapsed year, individual points for expanded items.
       const avgWts = [], maxWts = [];
@@ -784,17 +781,26 @@
         afterDraw(chart) {
           const xScale = chart.scales.x;
           if (!xScale || !chartItems.length) return;
-          const axisTop = chart.chartArea.bottom;
-          const axisBot = xScale.bottom;
-          const rowH    = (axisBot - axisTop) / 4;
-          const ctx     = chart.ctx;
+          const chartTop = chart.chartArea.top;
+          const axisTop  = chart.chartArea.bottom;  // top of axis label area
+          const axisBot  = xScale.bottom;
+          const rowH     = (axisBot - axisTop) / 4;
+          const ctx      = chart.ctx;
           ctx.save();
-          ctx.strokeStyle = '#475569';
-          ctx.lineWidth   = 1;
+          ctx.lineWidth = 1;
           chartItems.forEach((item, idx) => {
             const prev = idx > 0 ? chartItems[idx - 1] : null;
-            // No divider between months within the same collapsed year
+            // Skip internal slots within a collapsed year
             if (item.isYearCollapsed && prev?.isYearCollapsed && prev.cy === item.cy) return;
+            const slotHalf = item.isYearCollapsed ? 1/6 : 0.5;
+            const x = xScale.getPixelForValue(item.virtualX - slotHalf);
+            // Grid line through the chart area
+            ctx.beginPath();
+            ctx.strokeStyle = '#1e293b';
+            ctx.moveTo(x, chartTop);
+            ctx.lineTo(x, axisTop);
+            ctx.stroke();
+            // Hierarchical tick divider into the axis label area
             const lbl = item.label;
             let depth = 4;
             if (Array.isArray(lbl)) {
@@ -802,9 +808,8 @@
               else if (lbl[1] !== '') depth = 2;
               else if (lbl[2] !== '') depth = 3;
             }
-            const slotHalf = item.isYearCollapsed ? 1/6 : 0.5;
-            const x = xScale.getPixelForValue(item.virtualX - slotHalf);
             ctx.beginPath();
+            ctx.strokeStyle = '#475569';
             ctx.moveTo(x, axisTop);
             ctx.lineTo(x, axisTop + rowH * depth);
             ctx.stroke();
@@ -868,8 +873,8 @@
                 const centerTicks = [...yearCenterValues].map(v => ({value: v}));
                 scale.ticks = [...itemTicks, ...centerTicks].sort((a, b) => a.value - b.value);
               },
-              ticks: { color: "#64748b", maxRotation: 45, autoSkip: false, callback(v) { return tickLabelMap.get(v) ?? ''; } },
-              grid: { color(ctx) { return suppressedGridValues.has(ctx.tick?.value) ? 'transparent' : '#1e293b'; }, drawTicks: false },
+              ticks: { color: "#64748b", maxRotation: 0, minRotation: 0, autoSkip: false, callback(v) { return tickLabelMap.get(v) ?? ''; } },
+              grid: { display: false, drawTicks: false },
             },
             y:  { min: compMin, max: compMax, ticks: { color: "#64748b", callback: v => fmt(v,1) }, grid: { color: "#334155" } },
             y2: { min: 0, max: 7, position: "right", ticks: { color: "#64748b", stepSize: 1 }, grid: { drawOnChartArea: false } },
