@@ -343,36 +343,6 @@
     let gymInitialized    = false;
     let gymChart = null;
 
-    // Custom scale: distributes x-axis width proportionally by per-item weights.
-    // Year-collapsed items use weight 0.5; all others use 1.0.
-    class WeightedCategoryScale extends Chart.scales.CategoryScale {
-      getPixelForValue(value, index) {
-        const weights = this.options.weights;
-        if (!weights || !weights.length) return super.getPixelForValue(value, index);
-        let idx = typeof index !== 'undefined' ? index : parseInt(value);
-        if (isNaN(idx)) return null;
-        idx = Math.max(0, Math.min(idx, weights.length - 1));
-        const total = weights.reduce((s, w) => s + w, 0);
-        const cum   = weights.slice(0, idx).reduce((s, w) => s + w, 0);
-        return this._startPixel + (cum + weights[idx] / 2 + 0.5) / (total + 1) * this._length;
-      }
-      getValueForPixel(pixel) {
-        const weights = this.options.weights;
-        if (!weights) return super.getValueForPixel(pixel);
-        const total  = weights.reduce((s, w) => s + w, 0);
-        const target = ((pixel - this._startPixel) / this._length) * (total + 1) - 0.5;
-        let cum = 0;
-        for (let i = 0; i < weights.length; i++) {
-          if (cum + weights[i] > target) return i;
-          cum += weights[i];
-        }
-        return weights.length - 1;
-      }
-    }
-    WeightedCategoryScale.id = 'weightedCategory';
-    WeightedCategoryScale.defaults = Chart.scales.CategoryScale.defaults;
-    Chart.register(WeightedCategoryScale);
-
     function updateCompChart() {
       if (!gymChart) return;
       const mn = parseFloat(document.getElementById("comp-min").value);
@@ -654,7 +624,6 @@
             firstPushed = true;
             chartItems.push({
               cy: year, cm: null, cw: null,
-              isYearCollapsed: true,
               weeks: Object.keys(tree[year][month]),
               bone: mAgg.bone??null, muscle: mAgg.muscle??null, fat: mAgg.fat??null,
               avgWt: isFirst ? (yAgg?.avgWt??null) : null,
@@ -739,8 +708,7 @@
           item.cy && item.cy !== prev?.cy ? item.cy : "",
         ];
       });
-      const chartLabels  = chartItems.map(i => i.label);
-      const chartWeights = chartItems.map(i => i.isYearCollapsed ? 0.5 : 1.0);
+      const chartLabels = chartItems.map(i => i.label);
       const avgWts = chartItems.map(i => i.avgWt);
       const maxWts = chartItems.map(i => i.maxWt);
       const compMin = parseFloat(document.getElementById("comp-min").value) || 120;
@@ -764,9 +732,6 @@
           ctx.save();
           ctx.strokeStyle = '#475569';
           ctx.lineWidth   = 1;
-          const weights = xScale.options.weights || lbs.map(() => 1);
-          const total   = weights.reduce((s, w) => s + w, 0);
-          let cumW = 0;
           lbs.forEach((lbl, idx) => {
             let depth = 4; // year default
             if (Array.isArray(lbl)) {
@@ -774,12 +739,11 @@
               else if (lbl[1] !== '') depth = 2; // week
               else if (lbl[2] !== '') depth = 3; // month
             }
-            const x = xScale._startPixel + (cumW + 0.5) / (total + 1) * xScale._length;
+            const x = xScale.getPixelForValue(idx - 0.5);
             ctx.beginPath();
             ctx.moveTo(x, axisTop);
             ctx.lineTo(x, axisTop + rowH * depth);
             ctx.stroke();
-            cumW += weights[idx];
           });
           ctx.restore();
         }
@@ -809,7 +773,7 @@
             tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}` } },
           },
           scales: {
-            x: { type: 'weightedCategory', weights: chartWeights, ticks: { color: "#64748b", maxRotation: 45 }, grid: { color: "#1e293b", drawTicks: false } },
+            x: { ticks: { color: "#64748b", maxRotation: 45 }, grid: { color: "#1e293b", drawTicks: false } },
             y:  { min: compMin, max: compMax, ticks: { color: "#64748b", callback: v => fmt(v,1) }, grid: { color: "#334155" } },
             y2: { min: 0, max: 7, position: "right", ticks: { color: "#64748b", stepSize: 1 }, grid: { drawOnChartArea: false } },
           },
