@@ -716,6 +716,31 @@
         item.virtualX = cumVirtualX + slotWidth / 2;
         cumVirtualX += slotWidth;
       });
+      // For collapsed years with multiple months, center the year label across all months.
+      // Collect each collapsed year's virtualX positions, then build a tickLabelMap so
+      // the year label appears at the midpoint rather than the first month.
+      const collapsedYearXs = new Map(); // year → [virtualX, ...]
+      chartItems.forEach(item => {
+        if (!item.isYearCollapsed) return;
+        if (!collapsedYearXs.has(item.cy)) collapsedYearXs.set(item.cy, []);
+        collapsedYearXs.get(item.cy).push(item.virtualX);
+      });
+      const yearCenterValues = new Set(); // virtualX values that are year-center ticks (no bar)
+      const tickLabelMap = new Map();     // virtualX → label array
+      chartItems.forEach(item => {
+        const lbl = [...item.label];
+        const xs = collapsedYearXs.get(item.cy);
+        if (item.isYearCollapsed && xs && xs.length > 1) lbl[3] = ''; // year moved to center
+        tickLabelMap.set(item.virtualX, lbl);
+      });
+      collapsedYearXs.forEach((xs, year) => {
+        if (xs.length > 1) {
+          const cx = (xs[0] + xs[xs.length - 1]) / 2;
+          tickLabelMap.set(cx, ["", "", "", year]);
+          yearCenterValues.add(cx);
+        }
+      });
+
       const avgWts = chartItems.map(i => ({x: i.virtualX, y: i.avgWt}));
       const maxWts = chartItems.map(i => ({x: i.virtualX, y: i.maxWt}));
       const compMin = parseFloat(document.getElementById("comp-min").value) || 120;
@@ -806,9 +831,13 @@
           scales: {
             x: {
               type: 'linear',
-              afterBuildTicks(scale) { scale.ticks = chartItems.map(i => ({value: i.virtualX})); },
-              ticks: { color: "#64748b", maxRotation: 45, callback(v, i) { return chartItems[i]?.label ?? ''; } },
-              grid: { color: "#1e293b", drawTicks: false },
+              afterBuildTicks(scale) {
+                const itemTicks   = chartItems.map(i => ({value: i.virtualX}));
+                const centerTicks = [...yearCenterValues].map(v => ({value: v}));
+                scale.ticks = [...itemTicks, ...centerTicks].sort((a, b) => a.value - b.value);
+              },
+              ticks: { color: "#64748b", maxRotation: 45, callback(v) { return tickLabelMap.get(v) ?? ''; } },
+              grid: { color(ctx) { return yearCenterValues.has(ctx.tick?.value) ? 'transparent' : '#1e293b'; }, drawTicks: false },
             },
             y:  { min: compMin, max: compMax, ticks: { color: "#64748b", callback: v => fmt(v,1) }, grid: { color: "#334155" } },
             y2: { min: 0, max: 7, position: "right", ticks: { color: "#64748b", stepSize: 1 }, grid: { drawOnChartArea: false } },
