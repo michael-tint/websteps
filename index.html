@@ -760,9 +760,30 @@
         }
       };
 
+      // Fix bar widths: linear scale sizes all bars to the minimum gap (0.5 units from
+      // compressed items). Recompute each bar's width from slot width × px/unit × barPercentage.
+      const gymBarWidthPlugin = {
+        id: 'gymBarWidth',
+        beforeDatasetsDraw(chart) {
+          if (!chartItems.some(i => i.isYearCollapsed)) return;
+          const xScale = chart.scales.x;
+          const pxPerUnit = Math.abs(xScale.getPixelForValue(1) - xScale.getPixelForValue(0));
+          chart.data.datasets.forEach((ds, di) => {
+            const meta = chart.getDatasetMeta(di);
+            if (meta.type !== 'bar') return;
+            const fillFraction = ds.barPercentage ?? 1.0;
+            meta.data.forEach((el, i) => {
+              const item = chartItems[i];
+              if (!item) return;
+              el.width = (item.isYearCollapsed ? 0.5 : 1.0) * pxPerUnit * fillFraction;
+            });
+          });
+        }
+      };
+
       if (gymChart) gymChart.destroy();
       gymChart = new Chart(document.getElementById("gymChart"), {
-        plugins: [gymTickPlugin],
+        plugins: [gymTickPlugin, gymBarWidthPlugin],
         data: {
           datasets: [
             { type: "bar",  label: "Gym", data: sessData, yAxisID: "y2", backgroundColor: "rgba(74,222,128,0.13)", borderWidth: 0, barPercentage: 1.0, categoryPercentage: 1.0, order: 10 },
