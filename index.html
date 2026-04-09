@@ -858,6 +858,8 @@
           scales: {
             x: {
               type: 'linear',
+              min: chartItems.length ? chartItems[0].virtualX - (chartItems[0].isYearCollapsed ? 1/6 : 0.5) : 0,
+              max: chartItems.length ? chartItems[chartItems.length-1].virtualX + (chartItems[chartItems.length-1].isYearCollapsed ? 1/6 : 0.5) : 1,
               afterBuildTicks(scale) {
                 const itemTicks   = chartItems.map(i => ({value: i.virtualX}));
                 const centerTicks = [...yearCenterValues].map(v => ({value: v}));
