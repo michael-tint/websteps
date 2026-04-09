@@ -588,6 +588,7 @@
       let html = "";
       const emptyCols = `<td></td>`.repeat(12);
       const chartItems = []; // { label, weeks[] } — leaves of the visible tree
+      const collapsedYearWeights = new Map(); // year → {avgWt, maxWt} for weight-line centering
 
       // avg-of-week-averages for a set of week keys
       function weekAvgWt(weeks) {
@@ -614,24 +615,34 @@
           const yWeeks = sortedYearMonths.flatMap(m => Object.keys(tree[year][m]));
           const ySessTotal = yWeeks.reduce((s,w) => s + (allWeekAggs[w]?.gymCount || 0), 0);
           const ySess = yWeeks.length ? ySessTotal / yWeeks.length : null;
-          let firstPushed = false;
-          sortedYearMonths.forEach((month) => {
+          // Collect up to 4 months that have BMF data
+          const bmfMonths = [];
+          for (const month of sortedYearMonths) {
+            if (bmfMonths.length >= 4) break;
             const mEntries = Object.values(tree[year][month]).flat();
             const mAgg = gymAggregate(mEntries);
-            const hasBMF = mAgg.bone != null || mAgg.muscle != null || mAgg.fat != null;
-            if (!hasBMF) return;
-            const isFirst = !firstPushed;
-            firstPushed = true;
+            if (mAgg.bone != null || mAgg.muscle != null || mAgg.fat != null)
+              bmfMonths.push({month, mAgg});
+          }
+          // Store year-level weight for centering the weight line
+          collapsedYearWeights.set(year, {avgWt: yAgg?.avgWt??null, maxWt: yAgg?.maxWt??null});
+          // Always push exactly 6 half-width slots: phantom, 4× BMF (or empty), phantom
+          const phantom = {cy: year, cm: null, cw: null, isYearCollapsed: true, isPhantom: true,
+                           weeks: [], bone: null, muscle: null, fat: null,
+                           avgWt: null, maxWt: null, sess: null};
+          chartItems.push({...phantom});
+          for (let s = 0; s < 4; s++) {
+            const bm = bmfMonths[s];
             chartItems.push({
-              cy: year, cm: null, cw: null,
-              isYearCollapsed: true,
-              weeks: Object.keys(tree[year][month]),
-              bone: mAgg.bone??null, muscle: mAgg.muscle??null, fat: mAgg.fat??null,
-              avgWt: isFirst ? (yAgg?.avgWt??null) : null,
-              maxWt: isFirst ? (yAgg?.maxWt??null) : null,
-              sess:  ySess,
+              cy: year, cm: null, cw: null, isYearCollapsed: true,
+              weeks: bm ? Object.keys(tree[year][bm.month]) : [],
+              bone:   bm ? (bm.mAgg.bone??null)   : null,
+              muscle: bm ? (bm.mAgg.muscle??null)  : null,
+              fat:    bm ? (bm.mAgg.fat??null)     : null,
+              avgWt: null, maxWt: null, sess: ySess,
             });
-          });
+          }
+          chartItems.push({...phantom});
           continue;
         }
 
@@ -752,8 +763,9 @@
           seenWtYears.add(item.cy);
           const xs = collapsedYearXs.get(item.cy);
           const cx = xs && xs.length > 1 ? (xs[0] + xs[xs.length - 1]) / 2 : item.virtualX;
-          avgWts.push({x: cx, y: item.avgWt});
-          maxWts.push({x: cx, y: item.maxWt});
+          const wt = collapsedYearWeights.get(item.cy);
+          avgWts.push({x: cx, y: wt?.avgWt ?? null});
+          maxWts.push({x: cx, y: wt?.maxWt ?? null});
         }
       });
       const compMin = parseFloat(document.getElementById("comp-min").value) || 120;
