@@ -751,6 +751,24 @@
           yearCenterValues.add(cx);
         }
       });
+      // Center year label for expanded years (year expanded into visible months)
+      const expandedYearXs = new Map();
+      chartItems.forEach(item => {
+        if (item.isYearCollapsed) return;
+        if (!expandedYearXs.has(item.cy)) expandedYearXs.set(item.cy, []);
+        expandedYearXs.get(item.cy).push(item.virtualX);
+      });
+      expandedYearXs.forEach((xs, year) => {
+        if (xs.length <= 1) return;
+        for (const x of xs) {
+          const lbl = tickLabelMap.get(x);
+          if (lbl) lbl[3] = '';
+        }
+        const cx = (xs[0] + xs[xs.length - 1]) / 2;
+        const existing = tickLabelMap.get(cx);
+        if (existing) { existing[3] = year; }
+        else { tickLabelMap.set(cx, ["", "", "", year]); yearCenterValues.add(cx); }
+      });
 
       // Weight lines: one centered point per collapsed year, individual points for expanded items.
       const avgWts = [], maxWts = [];
@@ -782,6 +800,8 @@
           const xScale = chart.scales.x;
           const y2Scale = chart.scales.y2;
           if (!xScale || !y2Scale) return;
+          // Skip if Gym dataset is hidden via legend
+          if (chart.getDatasetMeta(0).hidden) return;
           const ctx = chart.ctx;
           const {left, top, right, bottom} = chart.chartArea;
           ctx.save();
@@ -827,11 +847,13 @@
             if (item.isYearCollapsed && prev?.isYearCollapsed && prev.cy === item.cy) return;
             const slotHalf = item.isYearCollapsed ? 1/6 : 0.5;
             const x = xScale.getPixelForValue(item.virtualX - slotHalf);
-            // Hierarchical tick divider into the axis label area
+            // Hierarchical tick divider: year=4, month=3, week=2, day=1
             const lbl = item.label;
-            let depth = 4;
-            if (Array.isArray(lbl) && lbl[2] === '' && lbl[3] === '') {
-              depth = lbl[1] !== '' ? 2 : 1;
+            let depth = 1;
+            if (Array.isArray(lbl)) {
+              if (lbl[3] !== '') depth = 4;
+              else if (lbl[2] !== '') depth = 3;
+              else if (lbl[1] !== '') depth = 2;
             }
             ctx.beginPath();
             ctx.strokeStyle = '#475569';
@@ -899,7 +921,17 @@
           datasets: { bar: { grouped: false } },
           plugins: {
             legend: { labels: { color: "#94a3b8" } },
-            tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}` } },
+            tooltip: { callbacks: {
+              title: items => {
+                const item = chartItems[items[0]?.dataIndex];
+                if (!item) return '';
+                if (item.cd) return item.cd;
+                if (item.cw) return `${item.cw}, ${item.cy}`;
+                if (item.cm) return `${item.cm} ${item.cy}`;
+                return item.cy || '';
+              },
+              label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}`
+            } },
           },
           scales: {
             x: {
@@ -1471,6 +1503,10 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         headers: { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" },
         body: JSON.stringify({ files }),
       }).catch(() => null);
+      if (!res?.ok) {
+        const body = await res?.json().catch(() => null);
+        console.error(`patchGist failed: HTTP ${res?.status}`, body);
+      }
       return res?.ok ?? false;
     }
 
