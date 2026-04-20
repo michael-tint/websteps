@@ -920,7 +920,12 @@
           maintainAspectRatio: false,
           datasets: { bar: { grouped: false } },
           plugins: {
-            legend: { labels: { color: "#94a3b8" } },
+            legend: { labels: { color: "#94a3b8", generateLabels(chart) {
+              const labels = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+              const gym = labels.find(l => l.text === 'Gym');
+              if (gym) { gym.fillStyle = 'rgba(74,222,128,0.55)'; gym.strokeStyle = 'rgba(74,222,128,0.55)'; }
+              return labels;
+            } } },
             tooltip: { callbacks: {
               title: items => {
                 const item = chartItems[items[0]?.dataIndex];
