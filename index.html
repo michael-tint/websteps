@@ -638,7 +638,7 @@
               avgWt: null, maxWt: null, sess: ySess,
             });
           }
-          for (let s = 0; s < Math.min(4, sortedYearMonths.length); s++) {
+          for (let s = 0; s < Math.min(year === "2023" ? 3 : 4, sortedYearMonths.length); s++) {
             const bm = bmfMonths[s];
             chartItems.push({
               cy: year, cm: null, cw: null, isYearCollapsed: true,
