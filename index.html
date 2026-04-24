@@ -1454,8 +1454,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + 1}" class="status">No data.</td></tr>`; return; }
       tbody.innerHTML = [...rows].reverse().map(r => {
         const isSat = new Date(r.date + "T12:00:00").getDay() === 6;
-        const rowStyle = isSat ? ' style="border-top:2px solid #64748b"' : '';
-        return `<tr${rowStyle}>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}<td><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
+        const cs = isSat ? ' style="border-top:2px solid #64748b"' : '';
+        return `<tr>${RAW_COLS.map(c=>`<td${cs}>${r[c.key]??"—"}</td>`).join("")}<td${cs}><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
       }).join("");
     }
 
@@ -1808,17 +1808,17 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       document.getElementById("weight-tbody").innerHTML = filteredDates.map(date => {
         const steps = meByDate[date] != null ? fmt(meByDate[date]) : "—";
         const isSat = new Date(date + "T12:00:00").getDay() === 6;
-        const rowStyle = isSat ? ' style="border-top:2px solid #64748b"' : '';
-        return `<tr${rowStyle}>
-          <td style="text-align:left;color:#94a3b8">${date}</td>
-          <td>${inp(date,"fat","w-comp",mergedData)}</td>
-          <td>${inp(date,"muscle","w-comp",mergedData)}</td>
-          <td>${inp(date,"bone","w-comp",mergedData)}</td>
-          <td>${inp(date,"gym","gym-input",mergedData)}</td>
-          <td>${inp(date,"weight","w-weight",mergedData)}</td>
-          <td style="color:#4ade80;text-align:right">${meWeightByDate[date] != null ? fmt(meWeightByDate[date],1) : ""}</td>
-          <td style="color:#94a3b8;text-align:left">${meWeightByDate[date] != null ? fmt(calcBMI(meWeightByDate[date]),1) : ""}</td>
-          <td style="color:#94a3b8;text-align:right">${steps}</td>
+        const bt = isSat ? 'border-top:2px solid #64748b;' : '';
+        return `<tr>
+          <td style="${bt}text-align:left;color:#94a3b8">${date}</td>
+          <td style="${bt}">${inp(date,"fat","w-comp",mergedData)}</td>
+          <td style="${bt}">${inp(date,"muscle","w-comp",mergedData)}</td>
+          <td style="${bt}">${inp(date,"bone","w-comp",mergedData)}</td>
+          <td style="${bt}">${inp(date,"gym","gym-input",mergedData)}</td>
+          <td style="${bt}">${inp(date,"weight","w-weight",mergedData)}</td>
+          <td style="${bt}color:#4ade80;text-align:right">${meWeightByDate[date] != null ? fmt(meWeightByDate[date],1) : ""}</td>
+          <td style="${bt}color:#94a3b8;text-align:left">${meWeightByDate[date] != null ? fmt(calcBMI(meWeightByDate[date]),1) : ""}</td>
+          <td style="${bt}color:#94a3b8;text-align:right">${steps}</td>
         </tr>`;
       }).join("");
     }
