@@ -1445,7 +1445,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       document.getElementById(`${user}-cards`).innerHTML = `
         <div class="card"><div class="card-label">Days</div><div class="card-value">${fmt(rows.length)}</div></div>
         <div class="card"><div class="card-label">Avg Steps/Day</div><div class="card-value">${fmt(avg("steps"))}</div></div>
-        <div class="card"><div class="card-label">This Week Steps/Day</div><div class="card-value">${fmt(weekAvgSteps)}</div></div>
+        <div class="card"><div class="card-label">Week Steps/Day</div><div class="card-value">${fmt(weekAvgSteps)}</div></div>
         <div class="card"><div class="card-label">Avg Calories</div><div class="card-value">${fmt(avg("caloriesOut"))}</div></div>
         <div class="card"><div class="card-label">Avg Heart Rate</div><div class="card-value">${hrRows.length?fmt(hrRows.reduce((s,r)=>s+r.restingHeartRate,0)/hrRows.length,1):"—"}</div></div>
         <div class="card"><div class="card-label">Avg Active Min</div><div class="card-value">${fmt(avg("fairlyActiveMinutes")+avg("veryActiveMinutes"))}</div></div>
