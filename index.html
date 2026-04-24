@@ -1451,7 +1451,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + 1}" class="status">No data.</td></tr>`; return; }
       tbody.innerHTML = [...rows].reverse().map(r => {
         const isSat = new Date(r.date + "T12:00:00").getDay() === 6;
-        const rowStyle = isSat ? ' style="border-top:2px solid #334155"' : '';
+        const rowStyle = isSat ? ' style="border-top:2px solid #64748b"' : '';
         return `<tr${rowStyle}>${RAW_COLS.map(c=>`<td>${r[c.key]??"—"}</td>`).join("")}<td><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
       }).join("");
     }
@@ -1804,8 +1804,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const filteredDates = allDates.filter(d => (!weightFrom || d >= weightFrom) && (!weightTo || d <= weightTo));
       document.getElementById("weight-tbody").innerHTML = filteredDates.map(date => {
         const steps = meByDate[date] != null ? fmt(meByDate[date]) : "—";
-        const isSunday = new Date(date + "T12:00:00").getDay() === 6;
-        const rowStyle = isSunday ? ' style="border-top:2px solid #334155"' : '';
+        const isSat = new Date(date + "T12:00:00").getDay() === 6;
+        const rowStyle = isSat ? ' style="border-top:2px solid #64748b"' : '';
         return `<tr${rowStyle}>
           <td style="text-align:left;color:#94a3b8">${date}</td>
           <td>${inp(date,"fat","w-comp",mergedData)}</td>
