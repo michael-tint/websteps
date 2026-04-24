@@ -1796,10 +1796,14 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         return (n > 0 ? "+" : "") + Number(n).toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
       }
       function deltaClass(n) { return n == null ? "" : n < 0 ? "green" : n > 0 ? "red" : ""; }
+      const curWeekStart = weekStartEST();
+      const weekStepEntries = Object.entries(meByDate).filter(([d, s]) => d >= curWeekStart && d <= today && s);
+      const weekAvgStepsW = weekStepEntries.length ? weekStepEntries.reduce((s,[,v])=>s+v,0)/weekStepEntries.length : null;
       document.getElementById("weight-cards").innerHTML = `
         <div class="card"><div class="card-label">Latest Weight</div><div class="card-value blue">${latestW != null ? fmt(latestW,1) : "—"}</div></div>
         <div class="card"><div class="card-label">Week Δ</div><div class="card-value ${deltaClass(weekDelta)}">${fmtDelta(weekDelta)}</div></div>
         <div class="card"><div class="card-label">Month Δ</div><div class="card-value ${deltaClass(monthDelta)}">${fmtDelta(monthDelta)}</div></div>
+        <div class="card"><div class="card-label">Week Steps/Day</div><div class="card-value">${fmt(weekAvgStepsW)}</div></div>
       `;
 
       const weightFrom = document.getElementById("weight-from")?.value || "";
