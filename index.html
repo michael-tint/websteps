@@ -1440,8 +1440,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const hrRows = rows.filter(r=>r.restingHeartRate);
       const avg = key=>rows.reduce((s,r)=>s+(r[key]||0),0)/(rows.length||1);
       const curWeekStart = weekStartEST(), curWeekEnd = todayEST();
-      const weekRows = (allData[user]||[]).filter(r => r.date >= curWeekStart && r.date <= curWeekEnd);
-      const weekAvgSteps = weekRows.length ? weekRows.reduce((s,r)=>s+(r.steps||0),0)/weekRows.length : null;
+      const weekRows = (allData[user]||[]).filter(r => r.date >= curWeekStart && r.date <= curWeekEnd && r.steps);
+      const weekAvgSteps = weekRows.length ? weekRows.reduce((s,r)=>s+r.steps,0)/weekRows.length : null;
       document.getElementById(`${user}-cards`).innerHTML = `
         <div class="card"><div class="card-label">Days</div><div class="card-value">${fmt(rows.length)}</div></div>
         <div class="card"><div class="card-label">Avg Steps/Day</div><div class="card-value">${fmt(avg("steps"))}</div></div>
