@@ -1439,10 +1439,13 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const rows  = (allData[user]||[]).filter(r=>(!start||r.date>=start)&&(!end||r.date<=end));
       const hrRows = rows.filter(r=>r.restingHeartRate);
       const avg = key=>rows.reduce((s,r)=>s+(r[key]||0),0)/(rows.length||1);
+      const curWeekStart = weekStartEST(), curWeekEnd = todayEST();
+      const weekRows = (allData[user]||[]).filter(r => r.date >= curWeekStart && r.date <= curWeekEnd);
+      const weekAvgSteps = weekRows.length ? weekRows.reduce((s,r)=>s+(r.steps||0),0)/weekRows.length : null;
       document.getElementById(`${user}-cards`).innerHTML = `
         <div class="card"><div class="card-label">Days</div><div class="card-value">${fmt(rows.length)}</div></div>
         <div class="card"><div class="card-label">Avg Steps/Day</div><div class="card-value">${fmt(avg("steps"))}</div></div>
-        <div class="card"><div class="card-label">Total Steps</div><div class="card-value">${fmt(rows.reduce((s,r)=>s+(r.steps||0),0))}</div></div>
+        <div class="card"><div class="card-label">This Week Avg</div><div class="card-value">${fmt(weekAvgSteps)}</div></div>
         <div class="card"><div class="card-label">Avg Calories</div><div class="card-value">${fmt(avg("caloriesOut"))}</div></div>
         <div class="card"><div class="card-label">Avg Heart Rate</div><div class="card-value">${hrRows.length?fmt(hrRows.reduce((s,r)=>s+r.restingHeartRate,0)/hrRows.length,1):"—"}</div></div>
         <div class="card"><div class="card-label">Avg Active Min</div><div class="card-value">${fmt(avg("fairlyActiveMinutes")+avg("veryActiveMinutes"))}</div></div>
