@@ -1079,22 +1079,83 @@
       else updateFitbitBoth(btn, statusEl);
     }
 
-    function headerReauth() {
+    async function headerReauth() {
       const btn = document.getElementById('header-reauth-btn');
       const statusEl = document.getElementById('header-update-status');
+      const setStatus = (msg, color) => { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
       const activeTab = localStorage.getItem('lastTab') || 'gym';
-      const script = activeTab === 'mom' ? 'authorize_mom_fitbit.py' : 'authorize_me_fitbit.py';
       btn.disabled = true;
-      statusEl.textContent = "Reauthorizing…";
-      statusEl.style.color = "#facc15";
-      fetch("/reauth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script }) })
-        .then(r => r.json())
-        .then(d => {
-          if (d.ok) { statusEl.textContent = "Reauth done!"; statusEl.style.color = "#4ade80"; }
-          else { statusEl.textContent = "Failed: " + (d.error || "unknown"); statusEl.style.color = "#f87171"; }
-        })
-        .catch(e => { statusEl.textContent = "Failed: " + e; statusEl.style.color = "#f87171"; })
-        .finally(() => { btn.disabled = false; });
+
+      const cfg = await getDecryptedConfig(setStatus);
+      if (!cfg) { btn.disabled = false; return; }
+      const creds = activeTab === 'mom' ? cfg.momCreds : cfg.meCreds;
+      if (!creds?.client_id) { setStatus("No credentials for " + activeTab, "#f87171"); btn.disabled = false; return; }
+
+      const REDIRECT_URI = "http://localhost:8080";
+      const SCOPES = "activity heartrate weight profile";
+      const authUrl = "https://www.fitbit.com/oauth2/authorize"
+        + `?response_type=code&client_id=${creds.client_id}`
+        + `&scope=${encodeURIComponent(SCOPES)}`
+        + `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`
+        + `&expires_in=604800&prompt=login`;
+
+      setStatus("Waiting for auth…", "#facc15");
+      const popup = window.open(authUrl, "fitbit_auth", "width=500,height=700");
+      if (!popup) { setStatus("Popup blocked", "#f87171"); btn.disabled = false; return; }
+
+      // Poll popup for redirect to localhost
+      const code = await new Promise((resolve) => {
+        const iv = setInterval(() => {
+          try {
+            if (popup.closed) { clearInterval(iv); resolve(null); return; }
+            const loc = popup.location.href;
+            if (loc && loc.startsWith(REDIRECT_URI)) {
+              const params = new URL(loc).searchParams;
+              popup.close();
+              clearInterval(iv);
+              resolve(params.get("code"));
+            }
+          } catch {}
+        }, 500);
+      });
+
+      if (!code) { setStatus("Auth cancelled", "#f87171"); btn.disabled = false; return; }
+
+      // Exchange code for tokens
+      setStatus("Exchanging token…", "#facc15");
+      const fitbitAuth = btoa(`${creds.client_id}:${creds.client_secret}`);
+      const tokenRes = await fetch("https://api.fitbit.com/oauth2/token", {
+        method: "POST",
+        headers: { "Authorization": `Basic ${fitbitAuth}`, "Content-Type": "application/x-www-form-urlencoded" },
+        body: `grant_type=authorization_code&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`,
+      }).catch(() => null);
+
+      if (!tokenRes?.ok) { setStatus(`Token exchange failed (${tokenRes?.status})`, "#f87171"); btn.disabled = false; return; }
+      const tokens = await tokenRes.json();
+      creds.refresh_token = tokens.refresh_token;
+
+      // Save updated config
+      setStatus("Saving…", "#facc15");
+      await encryptAndSaveConfig(cfg, setStatus);
+
+      // Also update the per-user json creds on gist
+      const filename = activeTab === 'mom' ? 'mom.json' : 'me.json';
+      try {
+        const gistId = appConfig.gistId;
+        const gistRes = await fetch(`https://api.github.com/gists/${gistId}`, {
+          headers: { "Authorization": `Bearer ${cfg.gh_pat}`, "Accept": "application/vnd.github+json" },
+        });
+        const gist = await gistRes.json();
+        if (gist.files?.[filename]) {
+          const userData = JSON.parse(gist.files[filename].content);
+          if (!userData.creds) userData.creds = {};
+          userData.creds.refresh_token = tokens.refresh_token;
+          await patchGist({ [filename]: { content: JSON.stringify(userData, null, 2) } }, cfg.gh_pat);
+        }
+      } catch {}
+
+      setStatus("Reauth done!", "#4ade80");
+      btn.disabled = false;
     }
 
     // ── tab switching ─────────────────────────────────────────────────────────
