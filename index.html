@@ -186,6 +186,7 @@
     <div class="header-actions">
       <span id="header-update-status" style="font-size:0.8rem;color:#64748b"></span>
       <button class="save-btn" id="header-update-btn" onclick="headerUpdate()">Update</button>
+      <button class="save-btn" id="header-reauth-btn" onclick="headerReauth()" style="display:none">Reauth</button>
     </div>
   </div>
 
@@ -1078,6 +1079,24 @@
       else updateFitbitBoth(btn, statusEl);
     }
 
+    function headerReauth() {
+      const btn = document.getElementById('header-reauth-btn');
+      const statusEl = document.getElementById('header-update-status');
+      const activeTab = localStorage.getItem('lastTab') || 'gym';
+      const script = activeTab === 'mom' ? 'authorize_mom_fitbit.py' : 'authorize_me_fitbit.py';
+      btn.disabled = true;
+      statusEl.textContent = "Reauthorizing…";
+      statusEl.style.color = "#facc15";
+      fetch("/reauth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script }) })
+        .then(r => r.json())
+        .then(d => {
+          if (d.ok) { statusEl.textContent = "Reauth done!"; statusEl.style.color = "#4ade80"; }
+          else { statusEl.textContent = "Failed: " + (d.error || "unknown"); statusEl.style.color = "#f87171"; }
+        })
+        .catch(e => { statusEl.textContent = "Failed: " + e; statusEl.style.color = "#f87171"; })
+        .finally(() => { btn.disabled = false; });
+    }
+
     // ── tab switching ─────────────────────────────────────────────────────────
     function switchTab(name, btn) {
       document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
@@ -1085,6 +1104,7 @@
       btn.classList.add("active");
       document.getElementById(`panel-${name}`).classList.add("active");
       localStorage.setItem("lastTab", name);
+      document.getElementById("header-reauth-btn").style.display = (name === "me" || name === "mom") ? "" : "none";
       if (name==="me"     && !document.getElementById("me-tbody").innerHTML)     renderRaw("me");
 if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    renderRaw("mom");
       if (name==="weight") renderWeight();

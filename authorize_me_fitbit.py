@@ -1,9 +1,8 @@
 """
-authorize_mom_fitbit.py — OAuth flow for mom's Fitbit account using
-client_id/secret from the encrypted config.json (momCreds).
+authorize_fitbit.py — OAuth flow to get a new Fitbit refresh token with all scopes.
 
-Opens the browser, waits for OAuth redirect on localhost:8080.
-Updates fitbit_refresh_token.txt, encrypted config, and mom.json on Gist.
+Reads client_id/secret from the encrypted config.json (meCreds).
+After authorization, updates fitbit_refresh_token.txt, encrypted config, and me.json on Gist.
 """
 import base64, json, os, urllib.request, urllib.parse, webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -60,11 +59,11 @@ except Exception as e:
     print(f"Could not fetch Gist config ({e}), using local.")
 
 creds = decrypt(app_config["encryptedBlob"], app_config["salt"], app_config["iv"])
-mom   = creds.get("momCreds", {})
-client_id     = mom["client_id"]
-client_secret = mom["client_secret"]
+me    = creds.get("meCreds", {})
+CLIENT_ID     = me["client_id"]
+CLIENT_SECRET = me["client_secret"]
 pat           = creds["gh_pat"]
-print(f"Using mom client_id: {client_id}")
+print(f"Using client_id: {CLIENT_ID}")
 
 # ── Build auth URL and open browser ───────────────────────────────────────────
 REDIRECT_URI = "http://localhost:8080"
@@ -73,7 +72,7 @@ SCOPES       = "activity heartrate weight profile"
 auth_url = (
     "https://www.fitbit.com/oauth2/authorize"
     f"?response_type=code"
-    f"&client_id={client_id}"
+    f"&client_id={CLIENT_ID}"
     f"&scope={urllib.parse.quote(SCOPES)}"
     f"&redirect_uri={urllib.parse.quote(REDIRECT_URI)}"
     f"&expires_in=604800"
@@ -97,7 +96,7 @@ server = HTTPServer(("", 8080), Handler)
 t = Thread(target=server.handle_request)
 t.start()
 
-print("\nOpening browser for mom's Fitbit authorization...")
+print("\nOpening browser for Fitbit authorization...")
 webbrowser.open(auth_url)
 print("Waiting for redirect...")
 t.join()
@@ -107,20 +106,20 @@ if not code_holder[0]:
     print("No code received.")
     exit(1)
 
-code = code_holder[0]
-print(f"Got code: {code[:16]}...")
-
 # ── Exchange code for tokens ──────────────────────────────────────────────────
-print("Exchanging for tokens...")
-auth_header = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+print("Got code, exchanging for tokens...")
+auth_header = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
 req = urllib.request.Request(
     "https://api.fitbit.com/oauth2/token",
     data=urllib.parse.urlencode({
         "grant_type":   "authorization_code",
-        "code":         code,
+        "code":         code_holder[0],
         "redirect_uri": REDIRECT_URI,
     }).encode(),
-    headers={"Authorization": f"Basic {auth_header}", "Content-Type": "application/x-www-form-urlencoded"},
+    headers={
+        "Authorization": f"Basic {auth_header}",
+        "Content-Type":  "application/x-www-form-urlencoded",
+    }
 )
 try:
     tokens = json.loads(urllib.request.urlopen(req).read())
@@ -129,7 +128,6 @@ except urllib.error.HTTPError as e:
     exit(1)
 
 new_token = tokens["refresh_token"]
-print(f"New token: {new_token[:16]}...")
 print(f"Scopes granted: {tokens.get('scope', 'unknown')}")
 
 # ── Write fitbit_refresh_token.txt ────────────────────────────────────────────
@@ -138,7 +136,7 @@ with open(os.path.join(_dir, "fitbit_refresh_token.txt"), "w") as f:
 print("fitbit_refresh_token.txt updated.")
 
 # ── Update encrypted config ───────────────────────────────────────────────────
-creds["momCreds"]["refresh_token"] = new_token
+creds["meCreds"]["refresh_token"] = new_token
 blob, salt, iv = encrypt(creds)
 app_config["encryptedBlob"] = blob
 app_config["salt"]          = salt
@@ -155,20 +153,20 @@ try:
 except Exception as e:
     print(f"config.json Gist update failed ({e})")
 
-# ── Update mom.json on Gist ───────────────────────────────────────────────────
+# ── Update me.json on Gist ───────────────────────────────────────────────────
 try:
     req  = urllib.request.Request(f"https://api.github.com/gists/{gist_id}",
                                   headers={"Authorization": f"token {pat}",
                                            "Accept": "application/vnd.github+json"})
     gist = json.loads(urllib.request.urlopen(req).read())
-    if "mom.json" in gist["files"]:
-        mom_data = json.loads(gist["files"]["mom.json"]["content"])
-        mom_data.setdefault("creds", {})["refresh_token"] = new_token
-        patch_gist(gist_id, pat, "mom.json", json.dumps(mom_data, indent=2))
-        print("mom.json Gist updated.")
+    if "me.json" in gist["files"]:
+        me_data = json.loads(gist["files"]["me.json"]["content"])
+        me_data.setdefault("creds", {})["refresh_token"] = new_token
+        patch_gist(gist_id, pat, "me.json", json.dumps(me_data, indent=2))
+        print("me.json Gist updated.")
     else:
-        print("mom.json not found in Gist.")
+        print("me.json not found in Gist.")
 except Exception as e:
-    print(f"mom.json Gist update failed ({e})")
+    print(f"me.json Gist update failed ({e})")
 
-print("Done.")
+print("Done!")
