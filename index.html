@@ -1736,7 +1736,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
       // 3. Save updated data + refresh token
       setStatus("Saving…");
-      const dataOk = await patchGist({ [filename]: { content: JSON.stringify({ data: allData[dataKey] }, null, 2) } }, pat);
+      const filePayload = { creds: { client_id: creds.client_id, client_secret: creds.client_secret, refresh_token: creds.refresh_token }, data: allData[dataKey] };
+      const dataOk = await patchGist({ [filename]: { content: JSON.stringify(filePayload, null, 2) } }, pat);
       if (!dataOk) { if (setStatus) setStatus("Save failed", "#f87171"); if (btn) btn.disabled = false; return; }
       await encryptAndSaveConfig(cfg, setStatus);
 
