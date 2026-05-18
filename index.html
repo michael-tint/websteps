@@ -1675,7 +1675,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         } else {
           setStatus("Done — reload to see updates.", "#4ade80");
         }
-        if (btn) btn.disabled = false; return;
+        if (btn) btn.disabled = false; return true;
       }
 
       // ── production: direct Fitbit API + save to GitHub ───────────────────
@@ -1767,11 +1767,14 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (btn) btn.disabled = true;
       const noBtn = { disabled: false };
       const skipReload = true;
-      await updateFitbit(noBtn, statusEl, "me.json",  "me",  null, null, skipReload);
-      await updateFitbit(noBtn, statusEl, "mom.json", "mom", null, null, skipReload);
-      if (btn) btn.disabled = false;
       const setStatus = (msg, color) => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; } };
-      setStatus("Done! Reloading…", "#4ade80");
+      const meOk = await updateFitbit(noBtn, statusEl, "me.json",  "me",  null, null, skipReload);
+      const momOk = await updateFitbit(noBtn, statusEl, "mom.json", "mom", null, null, skipReload);
+      if (btn) btn.disabled = false;
+      if (!meOk && !momOk) { setStatus("Both updates failed", "#f87171"); return; }
+      if (!meOk) setStatus("Done (me failed)! Reloading…", "#facc15");
+      else if (!momOk) setStatus("Done (mom failed)! Reloading…", "#facc15");
+      else setStatus("Done! Reloading…", "#4ade80");
       setTimeout(() => { saveViewForReload(); location.reload(); }, 1200);
     }
 
