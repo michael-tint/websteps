@@ -1642,7 +1642,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         _saveTimers[key] = setTimeout(async () => {
           const cfg = await getDecryptedConfig(null);
           if (!cfg) { alert("No credentials available."); return; }
-          const ok = await patchGist({ [filename]: { content: JSON.stringify({ data: allData[key] }, null, 2) } }, cfg.gh_pat);
+          const creds = key === "me" ? cfg.meCreds : cfg.momCreds;
+          const filePayload = creds ? { creds: { client_id: creds.client_id, client_secret: creds.client_secret, refresh_token: creds.refresh_token }, data: allData[key] } : { data: allData[key] };
+          const ok = await patchGist({ [filename]: { content: JSON.stringify(filePayload, null, 2) } }, cfg.gh_pat);
           if (!ok) alert("Failed to save.");
         }, 600);
       }
@@ -1658,7 +1660,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (location.hostname === "localhost") {
         setStatus("Updating…");
         const res = await fetch("/update-fitbit", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target: filename }),
         }).catch(() => null);
         if (!res || !res.ok) {
           const err = res ? (await res.json().catch(() => ({}))).error : "Network error";
