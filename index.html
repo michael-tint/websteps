@@ -1010,23 +1010,18 @@
       if (configRes?.ok) { try { appConfig = await configRes.json(); } catch {} }
 
       let meParsed, momParsed, staticWeight;
-      // Prefer Gist's config.json for latest rotated tokens
-      const gistId    = appConfig?.gistId;
-      const gistOwner = appConfig?.gistOwner || "michael-tint";
+      const gistId = appConfig?.gistId;
       if (gistId) {
-        const raw = `https://gist.githubusercontent.com/${gistOwner}/${gistId}/raw`;
-        const [gistConfigRes, meRes, momRes, weightRes] = await Promise.all([
-          fetch(`${raw}/config.json${cacheBust}`).catch(() => null),
-          fetch(`${raw}/me.json${cacheBust}`).catch(() => null),
-          fetch(`${raw}/mom.json${cacheBust}`).catch(() => null),
-          fetch(`${raw}/weight_data.json${cacheBust}`).catch(() => null),
-        ]);
-        if (gistConfigRes?.ok) {
-          try { appConfig = { ...appConfig, ...await gistConfigRes.json() }; } catch {}
+        // api.github.com is not CDN-cached — always returns the live token
+        const gistRes = await fetch(`https://api.github.com/gists/${gistId}`).catch(() => null);
+        const gist    = gistRes?.ok ? await gistRes.json() : null;
+        const parse   = (name) => { try { return JSON.parse(gist?.files?.[name]?.content || "{}"); } catch { return {}; } };
+        if (gist?.files?.["config.json"]) {
+          try { appConfig = { ...appConfig, ...parse("config.json") }; } catch {}
         }
-        meParsed     = (meRes?.ok)     ? await meRes.json()     : {};
-        momParsed    = (momRes?.ok)    ? await momRes.json()    : {};
-        staticWeight = (weightRes?.ok) ? await weightRes.json() : {};
+        meParsed     = parse("me.json");
+        momParsed    = parse("mom.json");
+        staticWeight = parse("weight_data.json");
       } else {
         const [meRes, momRes, weightRes] = await Promise.all([
           fetch("me.json"          + cacheBust).catch(() => null),
@@ -1575,6 +1570,18 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       }
     }
 
+    async function reloadGistConfig() {
+      const gistId = appConfig?.gistId;
+      if (!gistId) return;
+      const res = await fetch(`https://api.github.com/gists/${gistId}`).catch(() => null);
+      if (!res?.ok) return;
+      const gist = await res.json();
+      const content = gist?.files?.["config.json"]?.content;
+      if (content) {
+        try { appConfig = { ...appConfig, ...JSON.parse(content) }; decryptedConfig = null; } catch {}
+      }
+    }
+
     // ── Gist data store ───────────────────────────────────────────────────────
     async function patchGist(files, pat) {
       const gistId = appConfig?.gistId;
@@ -1621,20 +1628,15 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     // ── delete me row ─────────────────────────────────────────────────────────
     const _saveTimers = {};
     async function deleteRow(date, key) {
-      const filename = key + ".json";
       allData[key] = allData[key].filter(r => r.date !== date);
       renderRaw(key);
-      if (location.hostname === "localhost") {
-        await fetch("/delete-me-row", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) }).catch(() => null);
-      } else {
-        clearTimeout(_saveTimers[key]);
-        _saveTimers[key] = setTimeout(async () => {
-          const cfg = await getDecryptedConfig(null);
-          if (!cfg) { alert("No credentials available."); return; }
-          const ok = await saveUserData(key, cfg.gh_pat);
-          if (!ok) alert("Failed to save.");
-        }, 600);
-      }
+      clearTimeout(_saveTimers[key]);
+      _saveTimers[key] = setTimeout(async () => {
+        const cfg = await getDecryptedConfig(null);
+        if (!cfg) { alert("No credentials available."); return; }
+        const ok = await saveUserData(key, cfg.gh_pat);
+        if (!ok) alert("Failed to save.");
+      }, 600);
     }
 
     // ── Fitbit update ─────────────────────────────────────────────────────────
@@ -1644,30 +1646,11 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const setStatus = (msg, color) => { if (!statusEl) return; statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; };
       if (btn) btn.disabled = true;
 
-      if (location.hostname === "localhost") {
-        setStatus("Updating…");
-        const res = await fetch("/update-fitbit", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target: filename }),
-        }).catch(() => null);
-        if (!res || !res.ok) {
-          const err = res ? (await res.json().catch(() => ({}))).error : "Network error";
-          setStatus("Failed: " + (err || res?.status), "#f87171");
-          if (btn) btn.disabled = false; return;
-        }
-        const fileRes = await fetch(`/${filename}?t=` + Date.now()).catch(() => null);
-        if (fileRes?.ok) {
-          const parsed = await fileRes.json();
-          allData[dataKey] = parsed.data || (Array.isArray(parsed) ? parsed : []);
-          document.getElementById(`${dataKey}-tbody`).innerHTML = "";
-          renderRaw(dataKey);
-          setStatus("Done!", "#4ade80");
-        } else {
-          setStatus("Done — reload to see updates.", "#4ade80");
-        }
-        if (btn) btn.disabled = false; return true;
-      }
+      // Always pull the freshest token from Gist before attempting a refresh
+      setStatus("Loading…");
+      await reloadGistConfig();
 
-      // ── production: direct Fitbit API + save to GitHub ───────────────────
+      // Direct Fitbit API + save to Gist (single path, browser-driven)
       const cfg = await getDecryptedConfig(setStatus);
       if (!cfg) { if (btn) btn.disabled = false; return; }
       const pat   = cfg.gh_pat;
