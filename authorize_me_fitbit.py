@@ -2,7 +2,7 @@
 authorize_fitbit.py — OAuth flow to get a new Fitbit refresh token with all scopes.
 
 Reads client_id/secret from the encrypted config.json (meCreds).
-After authorization, updates fitbit_refresh_token.txt, encrypted config, and me.json on Gist.
+After authorization, updates the encrypted config.json (single source of truth).
 """
 import base64, json, os, urllib.request, urllib.parse, webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -130,12 +130,7 @@ except urllib.error.HTTPError as e:
 new_token = tokens["refresh_token"]
 print(f"Scopes granted: {tokens.get('scope', 'unknown')}")
 
-# ── Write fitbit_refresh_token.txt ────────────────────────────────────────────
-with open(os.path.join(_dir, "fitbit_refresh_token.txt"), "w") as f:
-    f.write(new_token)
-print("fitbit_refresh_token.txt updated.")
-
-# ── Update encrypted config ───────────────────────────────────────────────────
+# ── Update encrypted config (single source of truth) ─────────────────────────
 creds["meCreds"]["refresh_token"] = new_token
 blob, salt, iv = encrypt(creds)
 app_config["encryptedBlob"] = blob
@@ -152,21 +147,5 @@ try:
     print("config.json Gist updated.")
 except Exception as e:
     print(f"config.json Gist update failed ({e})")
-
-# ── Update me.json on Gist ───────────────────────────────────────────────────
-try:
-    req  = urllib.request.Request(f"https://api.github.com/gists/{gist_id}",
-                                  headers={"Authorization": f"token {pat}",
-                                           "Accept": "application/vnd.github+json"})
-    gist = json.loads(urllib.request.urlopen(req).read())
-    if "me.json" in gist["files"]:
-        me_data = json.loads(gist["files"]["me.json"]["content"])
-        me_data.setdefault("creds", {})["refresh_token"] = new_token
-        patch_gist(gist_id, pat, "me.json", json.dumps(me_data, indent=2))
-        print("me.json Gist updated.")
-    else:
-        print("me.json not found in Gist.")
-except Exception as e:
-    print(f"me.json Gist update failed ({e})")
 
 print("Done!")

@@ -3,7 +3,7 @@ authorize_mom_fitbit.py — OAuth flow for mom's Fitbit account using
 client_id/secret from the encrypted config.json (momCreds).
 
 Opens the browser, waits for OAuth redirect on localhost:8080.
-Updates fitbit_refresh_token.txt, encrypted config, and mom.json on Gist.
+Updates the encrypted config.json (single source of truth).
 """
 import base64, json, os, urllib.request, urllib.parse, webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -132,12 +132,7 @@ new_token = tokens["refresh_token"]
 print(f"New token: {new_token[:16]}...")
 print(f"Scopes granted: {tokens.get('scope', 'unknown')}")
 
-# ── Write fitbit_refresh_token.txt ────────────────────────────────────────────
-with open(os.path.join(_dir, "fitbit_refresh_token.txt"), "w") as f:
-    f.write(new_token)
-print("fitbit_refresh_token.txt updated.")
-
-# ── Update encrypted config ───────────────────────────────────────────────────
+# ── Update encrypted config (single source of truth) ─────────────────────────
 creds["momCreds"]["refresh_token"] = new_token
 blob, salt, iv = encrypt(creds)
 app_config["encryptedBlob"] = blob
@@ -154,21 +149,5 @@ try:
     print("config.json Gist updated.")
 except Exception as e:
     print(f"config.json Gist update failed ({e})")
-
-# ── Update mom.json on Gist ───────────────────────────────────────────────────
-try:
-    req  = urllib.request.Request(f"https://api.github.com/gists/{gist_id}",
-                                  headers={"Authorization": f"token {pat}",
-                                           "Accept": "application/vnd.github+json"})
-    gist = json.loads(urllib.request.urlopen(req).read())
-    if "mom.json" in gist["files"]:
-        mom_data = json.loads(gist["files"]["mom.json"]["content"])
-        mom_data.setdefault("creds", {})["refresh_token"] = new_token
-        patch_gist(gist_id, pat, "mom.json", json.dumps(mom_data, indent=2))
-        print("mom.json Gist updated.")
-    else:
-        print("mom.json not found in Gist.")
-except Exception as e:
-    print(f"mom.json Gist update failed ({e})")
 
 print("Done.")

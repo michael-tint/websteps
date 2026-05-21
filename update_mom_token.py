@@ -1,6 +1,6 @@
 """
-update_mom_token.py — update momCreds.refresh_token in the encrypted config
-AND mom.json creds.refresh_token on the Gist, then save back locally.
+update_mom_token.py — update momCreds.refresh_token in the encrypted config.
+Reads new token from fitbit_refresh_token.txt, saves to config.json only.
 """
 import base64, json, os, urllib.request
 
@@ -104,25 +104,5 @@ try:
 except Exception as e:
     print(f"config.json Gist update failed ({e})")
     print("Local config.json is saved — commit and push it to deploy.")
-
-# ── Also update mom.json creds.refresh_token on the Gist ─────────────────────
-print("Updating mom.json on Gist...")
-try:
-    req = urllib.request.Request(
-        f"https://api.github.com/gists/{gist_id}",
-        headers={"Authorization": f"token {pat}", "Accept": "application/vnd.github+json"},
-    )
-    gist = json.loads(urllib.request.urlopen(req).read())
-    if "mom.json" in gist["files"]:
-        mom_data = json.loads(gist["files"]["mom.json"]["content"])
-        old_mom_token = mom_data.get("creds", {}).get("refresh_token", "")
-        print(f"  mom.json old token: {old_mom_token[:16]}...")
-        mom_data.setdefault("creds", {})["refresh_token"] = new_token
-        patch_gist(gist_id, pat, "mom.json", json.dumps(mom_data, indent=2))
-        print("mom.json Gist updated.")
-    else:
-        print("mom.json not found in Gist — skipping.")
-except Exception as e:
-    print(f"mom.json Gist update failed ({e})")
 
 print("Done.")
