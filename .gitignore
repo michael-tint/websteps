@@ -7,6 +7,8 @@ __pycache__/
 serve.py
 start.bat
 export_data.py
+authorize_me_fitbit.py
+authorize_mom_fitbit.py
 new_refresh_token.txt
 fitbit_refresh_token.txt
 gh_pat.txt
