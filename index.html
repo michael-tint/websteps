@@ -1062,16 +1062,24 @@
         renderGym();
       }
 
+      // Run any update that was queued before the pre-update reload
+      const pendingUpdate = localStorage.getItem('pendingUpdate');
+      if (pendingUpdate) {
+        localStorage.removeItem('pendingUpdate');
+        const btn = document.getElementById('header-update-btn');
+        const statusEl = document.getElementById('header-update-status');
+        if (pendingUpdate === 'me') updateFitbitMe(btn, statusEl);
+        else if (pendingUpdate === 'mom') updateFitbitMom(btn, statusEl);
+        else updateFitbitBoth(btn, statusEl);
+      }
+
     }
 
     //── header update button ──────────────────────────────────────────────────
     function headerUpdate() {
-      const btn = document.getElementById('header-update-btn');
-      const statusEl = document.getElementById('header-update-status');
-      const activeTab = localStorage.getItem('lastTab') || 'gym';
-      if (activeTab === 'me') updateFitbitMe(btn, statusEl);
-      else if (activeTab === 'mom') updateFitbitMom(btn, statusEl);
-      else updateFitbitBoth(btn, statusEl);
+      saveViewForReload();
+      localStorage.setItem('pendingUpdate', localStorage.getItem('lastTab') || 'gym');
+      location.reload();
     }
 
 
