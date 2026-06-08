@@ -1515,14 +1515,13 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
     async function reloadGistConfig() {
       const gistId = appConfig?.gistId;
-      if (!gistId) return;
+      if (!gistId) return false;
       const res = await fetch(`https://api.github.com/gists/${gistId}`).catch(() => null);
-      if (!res?.ok) return;
+      if (!res?.ok) return false;
       const gist = await res.json();
       const content = gist?.files?.["config.json"]?.content;
-      if (content) {
-        try { appConfig = { ...appConfig, ...JSON.parse(content) }; decryptedConfig = null; } catch {}
-      }
+      if (!content) return false;
+      try { appConfig = { ...appConfig, ...JSON.parse(content) }; decryptedConfig = null; return true; } catch { return false; }
     }
 
     // ── Gist data store ───────────────────────────────────────────────────────
@@ -1591,7 +1590,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
       // Always pull the freshest token from Gist before attempting a refresh
       setStatus("Loading…");
-      await reloadGistConfig();
+      const configOk = await reloadGistConfig();
+      if (!configOk) { setStatus("Could not reach Gist — check connection and retry", "#f87171"); if (btn) btn.disabled = false; return; }
 
       // Direct Fitbit API + save to Gist (single path, browser-driven)
       const cfg = await getDecryptedConfig(setStatus);
