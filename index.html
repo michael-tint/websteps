@@ -1668,9 +1668,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       renderWeight();
       renderDashboard();
       render();
-      setStatus("Done! Reloading…", "#4ade80");
+      setStatus("Done!", "#4ade80");
       if (btn) btn.disabled = false;
-      if (!skipReload) setTimeout(() => { saveViewForReload(); location.reload(); }, 1200);
       return true;
     }
 
@@ -1683,16 +1682,14 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     async function updateFitbitBoth(btn, statusEl) {
       if (btn) btn.disabled = true;
       const noBtn = { disabled: false };
-      const skipReload = true;
       const setStatus = (msg, color) => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || "#94a3b8"; } };
-      const meOk = await updateFitbit(noBtn, statusEl, "me.json",  "me",  null, null, skipReload);
-      const momOk = await updateFitbit(noBtn, statusEl, "mom.json", "mom", null, null, skipReload);
+      const meOk  = await updateFitbit(noBtn, statusEl, "me.json",  "me",  null, null, true);
+      const momOk = await updateFitbit(noBtn, statusEl, "mom.json", "mom", null, null, true);
       if (btn) btn.disabled = false;
       if (!meOk && !momOk) { setStatus("Both updates failed", "#f87171"); return; }
-      if (!meOk) setStatus("Done (me failed)! Reloading…", "#facc15");
-      else if (!momOk) setStatus("Done (mom failed)! Reloading…", "#facc15");
-      else setStatus("Done! Reloading…", "#4ade80");
-      setTimeout(() => { saveViewForReload(); location.reload(); }, 1200);
+      if (!meOk) setStatus("Done (me failed)", "#facc15");
+      else if (!momOk) setStatus("Done (mom failed)", "#facc15");
+      else setStatus("Done!", "#4ade80");
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
