@@ -1485,14 +1485,16 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     async function encryptAndSaveConfig(data, setStatus) {
-      if (!sessionPassword || !appConfig) return;
+      if (!sessionPassword || !appConfig) return false;
       const salt      = crypto.getRandomValues(new Uint8Array(16));
       const iv        = crypto.getRandomValues(new Uint8Array(12));
       const key       = await deriveKey(sessionPassword, salt);
       const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(data)));
       const newConfig = { ...appConfig, encryptedBlob: toB64(encrypted), salt: toB64(salt), iv: toB64(iv) };
       appConfig = newConfig;
-      await patchGist({ "config.json": { content: JSON.stringify(newConfig, null, 2) } }, data.gh_pat);
+      const ok = await patchGist({ "config.json": { content: JSON.stringify(newConfig, null, 2) } }, data.gh_pat);
+      if (!ok && setStatus) setStatus("Token save failed — run authorize script before next update", "#f87171");
+      return ok;
     }
 
     async function getDecryptedConfig(setStatus) {
@@ -1651,7 +1653,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
       // 3. Save rotated token to config, then data (no creds in user files)
       setStatus("Saving…");
-      await encryptAndSaveConfig(cfg, setStatus);
+      const configSaved = await encryptAndSaveConfig(cfg, setStatus);
+      if (!configSaved) { if (btn) btn.disabled = false; return; }
       const dataOk = await saveUserData(dataKey, pat);
       if (!dataOk) { if (setStatus) setStatus("Save failed", "#f87171"); if (btn) btn.disabled = false; return; }
 
