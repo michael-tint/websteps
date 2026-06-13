@@ -1668,8 +1668,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       renderWeight();
       renderDashboard();
       render();
-      setStatus("Done!", "#4ade80");
+      setStatus("Done! Reloading…", "#4ade80");
       if (btn) btn.disabled = false;
+      if (!skipReload) setTimeout(() => { saveViewForReload(); location.reload(); }, 1200);
       return true;
     }
 
@@ -1687,9 +1688,10 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const momOk = await updateFitbit(noBtn, statusEl, "mom.json", "mom", null, null, true);
       if (btn) btn.disabled = false;
       if (!meOk && !momOk) { setStatus("Both updates failed", "#f87171"); return; }
-      if (!meOk) setStatus("Done (me failed)", "#facc15");
-      else if (!momOk) setStatus("Done (mom failed)", "#facc15");
-      else setStatus("Done!", "#4ade80");
+      if (!meOk) setStatus("Done (me failed)! Reloading…", "#facc15");
+      else if (!momOk) setStatus("Done (mom failed)! Reloading…", "#facc15");
+      else setStatus("Done! Reloading…", "#4ade80");
+      setTimeout(() => { saveViewForReload(); location.reload(); }, 1200);
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
