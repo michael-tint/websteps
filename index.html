@@ -168,6 +168,7 @@
     .arrow { display: inline-block; width: 0.85rem; font-size: 0.58rem; opacity: 0.55; }
     td.me  { color: #60a5fa; font-weight: 600; }
     td.mom { color: #f472b6; font-weight: 600; }
+    tr.mom-beat > td { background: rgba(244,114,182,0.14); }
     .status { color: #475569; padding: 1.5rem; text-align: center; }
   </style>
 </head>
@@ -263,6 +264,7 @@
     <div class="controls">
       <label>From <input type="date" id="me-start" onchange="renderRaw('me')" /></label>
       <label>To &nbsp;&nbsp;<input type="date" id="me-end" onchange="renderRaw('me')" /></label>
+      <label style="display:flex;align-items:center;gap:0.35rem;"><input type="checkbox" id="me-mom-beat" onchange="renderRaw('me')" /> Mom &gt; Me only</label>
     </div>
     <div class="summary" id="me-cards"></div>
     <div class="table-wrap" style="flex:1;min-height:0;">
@@ -275,6 +277,7 @@
     <div class="controls">
       <label>From <input type="date" id="mom-start" onchange="renderRaw('mom')" /></label>
       <label>To &nbsp;&nbsp;<input type="date" id="mom-end" onchange="renderRaw('mom')" /></label>
+      <label style="display:flex;align-items:center;gap:0.35rem;"><input type="checkbox" id="mom-mom-beat" onchange="renderRaw('mom')" /> Mom &gt; Me only</label>
     </div>
     <div class="summary" id="mom-cards"></div>
     <div class="table-wrap" style="flex:1;min-height:0;">
@@ -1031,6 +1034,19 @@
         momParsed    = (momRes?.ok)    ? await momRes.json()    : {};
         staticWeight = (weightRes?.ok) ? await weightRes.json() : {};
       }
+      // Data stashed just before a post-update reload is newer than anything the
+      // Gist API can return (its reads can lag a fresh PATCH by a few seconds)
+      try {
+        const stash = JSON.parse(sessionStorage.getItem("freshData"));
+        sessionStorage.removeItem("freshData");
+        if (stash && Date.now() - stash.ts < 5 * 60 * 1000) {
+          if (stash.me)     meParsed     = { data: stash.me };
+          if (stash.mom)    momParsed    = { data: stash.mom };
+          if (stash.config) appConfig    = stash.config;
+          if (stash.weight) staticWeight = stash.weight;
+        }
+      } catch {}
+
       allData = {
         me:  (meParsed.data  || []).filter(r => r.date >= STEPS_FROM),
         mom: (momParsed.data || (Array.isArray(momParsed) ? momParsed : [])).filter(r => r.date >= STEPS_FROM),
@@ -1403,6 +1419,20 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       renderChart(items);
     }
 
+    // Stash just-saved data before a post-update reload — the Gist API read
+    // can lag a fresh PATCH by a few seconds and would resurrect stale data
+    function stashFreshData() {
+      try {
+        sessionStorage.setItem("freshData", JSON.stringify({
+          ts: Date.now(),
+          me: allData.me,
+          mom: allData.mom,
+          config: appConfig,
+          weight: weightData,
+        }));
+      } catch {}
+    }
+
     function saveViewForReload() {
       localStorage.setItem("gymViewReload", JSON.stringify({
         v: 2,
@@ -1442,7 +1472,12 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     function renderRaw(user) {
       const start = document.getElementById(`${user}-start`).value;
       const end   = document.getElementById(`${user}-end`).value;
-      const rows  = (allData[user]||[]).filter(r=>(!start||r.date>=start)&&(!end||r.date<=end));
+      const momSteps = new Map((allData.mom||[]).map(r=>[r.date, r.steps||0]));
+      const meSteps  = new Map((allData.me ||[]).map(r=>[r.date, r.steps||0]));
+      const momBeat  = date => (momSteps.get(date)||0) > (meSteps.get(date)||0);
+      const momBeatOnly = document.getElementById(`${user}-mom-beat`)?.checked;
+      let rows = (allData[user]||[]).filter(r=>(!start||r.date>=start)&&(!end||r.date<=end));
+      if (momBeatOnly) rows = rows.filter(r => momBeat(r.date));
       const hrRows = rows.filter(r=>r.restingHeartRate);
       const avg = key=>rows.reduce((s,r)=>s+(r[key]||0),0)/(rows.length||1);
       const curWeekStart = weekStartEST(), curWeekEnd = todayEST();
@@ -1461,7 +1496,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       tbody.innerHTML = [...rows].reverse().map(r => {
         const isSat = new Date(r.date + "T12:00:00").getDay() === 6;
         const cs = isSat ? ' style="border-top:2px solid #64748b"' : '';
-        return `<tr>${RAW_COLS.map(c=>`<td${cs}>${r[c.key]??"—"}</td>`).join("")}<td${cs}><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
+        return `<tr${momBeat(r.date)?' class="mom-beat"':''}>${RAW_COLS.map(c=>`<td${cs}>${r[c.key]??"—"}</td>`).join("")}<td${cs}><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
       }).join("");
     }
 
@@ -1670,7 +1705,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       render();
       setStatus("Done! Reloading…", "#4ade80");
       if (btn) btn.disabled = false;
-      if (!skipReload) setTimeout(() => { saveViewForReload(); location.reload(); }, 1200);
+      if (!skipReload) setTimeout(() => { saveViewForReload(); stashFreshData(); location.reload(); }, 1200);
       return true;
     }
 
@@ -1691,7 +1726,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (!meOk) setStatus("Done (me failed)! Reloading…", "#facc15");
       else if (!momOk) setStatus("Done (mom failed)! Reloading…", "#facc15");
       else setStatus("Done! Reloading…", "#4ade80");
-      setTimeout(() => { saveViewForReload(); location.reload(); }, 1200);
+      setTimeout(() => { saveViewForReload(); stashFreshData(); location.reload(); }, 1200);
     }
 
     // ── weight tab ────────────────────────────────────────────────────────────
