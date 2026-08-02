@@ -1310,6 +1310,14 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       document.getElementById("dash-tbody").innerHTML = html;
     }
 
+    // Round a raw tick spacing up to a readable one: 1, 2, 2.5 or 5 × a power of 10
+    function niceStep(raw) {
+      if (!(raw > 0)) return 1;
+      const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const f   = raw / mag;
+      return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * mag;
+    }
+
     // ── render chart ──────────────────────────────────────────────────────────
     function renderChart(items) {
       const leaves = items.filter(i => !i.open);
@@ -1326,6 +1334,12 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const mom   = leaves.map(i => i.mom);
       const meRef = leaves.map(i => computeRef('me',  i));
       const momRef= leaves.map(i => computeRef('mom', i));
+
+      // Scale y to the tallest thing actually on screen, rounded up to a whole
+      // tick interval (11,500 → 12,000). Refs are included so they never clip.
+      const peak = Math.max(0, ...[...me, ...mom, ...meRef, ...momRef].filter(v => v != null && !isNaN(v)));
+      const step = niceStep(peak / 7);
+      const yMax = peak > 0 ? Math.ceil(peak / step) * step : undefined;
 
       // Plugin: draw variable-depth tick marks (day=1 row, week=2, month=3, year=4)
       const stepsTickPlugin = {
@@ -1408,8 +1422,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
             x: { ticks:{ color:"#64748b", maxRotation:45 }, grid:{ color:"#1e293b", drawTicks:false } },
             y: {
               beginAtZero: true,
-              max: 20000,
-              ticks:{ color:"#64748b", callback:v=>fmt(v) },
+              max: yMax,
+              ticks:{ color:"#64748b", stepSize: step, callback:v=>fmt(v) },
               grid:{ color:"#334155" },
               title:{ display:true, text:"Steps", color:"#64748b" },
             },
