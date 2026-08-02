@@ -1386,14 +1386,14 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
               backgroundColor:"rgba(96,165,250,0.22)",
               borderColor:"rgba(96,165,250,0.55)", borderWidth:1.5,
               fill:"origin", pointRadius:0, pointHoverRadius:0,
-              tension:0.4, order:2,
+              cubicInterpolationMode:"monotone", order:2,
             },
             {
               type:"line", label:"_ref_mom", data:momRef,
               backgroundColor:"rgba(244,114,182,0.22)",
               borderColor:"rgba(244,114,182,0.55)", borderWidth:1.5,
               fill:"origin", pointRadius:0, pointHoverRadius:0,
-              tension:0.4, order:2,
+              cubicInterpolationMode:"monotone", order:2,
             },
             // Bars on top
             { label:"Me",  data:me,  backgroundColor:"rgba(96,165,250,0.80)",  borderWidth:0, borderRadius:3, order:1 },
