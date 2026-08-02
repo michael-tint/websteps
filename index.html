@@ -1100,14 +1100,11 @@
       }
       renderDashboard();
 
-      // Restore last-visited tab (default is gym)
-      const lastTab = localStorage.getItem("lastTab") || "gym";
-      if (lastTab !== "gym") {
-        const btn = [...document.querySelectorAll(".tab")].find(b => b.getAttribute("onclick").includes(`'${lastTab}'`));
-        if (btn) switchTab(lastTab, btn);
-      } else {
-        renderGym();
-      }
+      // A #hash picks the tab for direct links; otherwise use the last-visited one
+      const hashTab = tabFromHash();
+      const lastTab = hashTab || localStorage.getItem("lastTab") || "gym";
+      if (lastTab !== "gym") goToTab(lastTab);
+      else renderGym();
 
       // Run any update that was queued before the pre-update reload
       const pendingUpdate = localStorage.getItem('pendingUpdate');
@@ -1130,6 +1127,29 @@
     }
 
 
+
+    // ── deep links ────────────────────────────────────────────────────────────
+    // #steps, #gym, #weight, #me, #mom open that tab directly.
+    const TAB_ALIASES = { steps: "dashboard", dashboard: "dashboard", gym: "gym", weight: "weight", me: "me", mom: "mom" };
+
+    function tabFromHash() {
+      const tab = TAB_ALIASES[decodeURIComponent(location.hash).replace(/^#/, "").toLowerCase()];
+      // Consume the hash so the post-Update reload doesn't yank the tab back
+      if (tab) history.replaceState(null, "", location.pathname + location.search);
+      return tab;
+    }
+
+    function goToTab(name) {
+      const btn = [...document.querySelectorAll(".tab")].find(b => b.getAttribute("onclick").includes(`'${name}'`));
+      if (btn) switchTab(name, btn);
+    }
+
+    // Following the link while the page is already open only changes the hash —
+    // no reload happens, so init() never runs and the tab must be switched here
+    window.addEventListener("hashchange", () => {
+      const tab = tabFromHash();
+      if (tab) goToTab(tab);
+    });
 
     // ── tab switching ─────────────────────────────────────────────────────────
     function switchTab(name, btn) {
