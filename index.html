@@ -129,6 +129,7 @@
     }
     .chart-title { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 0.4rem; text-align: center; flex-shrink: 0; }
     .chart-wrap canvas { flex: 1; min-height: 0; }
+    .dash-main.chart-only .dash-table-wrap { display: none; }
 
     /* shared table */
     .table-wrap { background: #1e293b; border: 1px solid #334155; border-radius: 10px; overflow: auto; }
@@ -220,6 +221,7 @@
   <div id="panel-gym" class="panel active">
     <div class="controls">
       <button class="save-btn" onclick="saveGymView()">Save View</button>
+      <button class="save-btn" id="gym-chart-only-btn" onclick="toggleGymChartOnly(this)">Chart Only</button>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
         <span style="font-size:0.75rem;color:#64748b">From</span>
         <input type="date" id="gym-from" oninput="renderGym()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
@@ -996,8 +998,16 @@
         months: [...gymExpandedMonths],
         weeks:  [...gymExpandedWeeks],
       };
-      const btn = [...document.querySelectorAll(".save-btn")].find(b => b.textContent.trim() === "Save View");
+      const btn = [...document.querySelectorAll(".save-btn")].find(b => b.closest("#panel-gym") && b.textContent.trim() === "Save View");
       await saveViewsToGist(btn);
+    }
+
+    // Gym chart is cramped next to the fixed-width table — let it take the full row
+    function toggleGymChartOnly(btn) {
+      const main = document.querySelector("#panel-gym .dash-main");
+      const chartOnly = main.classList.toggle("chart-only");
+      btn.textContent = chartOnly ? "Show Table" : "Chart Only";
+      if (gymChart) gymChart.resize();
     }
 
     // Persist savedViews to the Gist so views follow the user across devices
