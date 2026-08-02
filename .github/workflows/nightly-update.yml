@@ -1,0 +1,41 @@
+name: Nightly Fitbit update
+
+on:
+  schedule:
+    # 12:15am America/New_York — both UTC offsets covered; the guard step
+    # below skips whichever firing isn't in the midnight hour ET.
+    - cron: "15 4 * * *"   # 00:15 EDT (summer)
+    - cron: "15 5 * * *"   # 00:15 EST (winter)
+  workflow_dispatch: {}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip unless midnight hour in ET
+        if: github.event_name == 'schedule'
+        run: |
+          hour=$(TZ=America/New_York date +%H)
+          echo "ET hour: $hour"
+          if [ "$hour" != "00" ]; then
+            echo "Not the midnight-hour firing — skipping."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/checkout@v4
+        if: env.SKIP != '1'
+
+      - uses: actions/setup-python@v5
+        if: env.SKIP != '1'
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        if: env.SKIP != '1'
+        run: pip install cryptography
+
+      - name: Run update
+        if: env.SKIP != '1'
+        env:
+          WEBSTEPS_PASSWORD: ${{ secrets.WEBSTEPS_PASSWORD }}
+        run: python nightly_update.py
