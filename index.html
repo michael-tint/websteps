@@ -317,6 +317,7 @@
   <script>
     let allData = {};
     let weightData = {};
+    let savedViews = {}; // { gym, steps } — synced to views.json in the Gist
     let meCreds  = null;
     let momCreds = null;
     let appConfig       = null; // parsed config.json
@@ -538,16 +539,11 @@
         gymInitialized = true;
         const reloadKey = localStorage.getItem("gymViewReload");
         if (reloadKey) { localStorage.removeItem("gymViewReload"); }
-        const saved = reloadKey || localStorage.getItem("gymView");
-        if (saved) {
-          const s = JSON.parse(saved);
-          if (s.v === 2) {
-            s.years.forEach(y  => gymExpandedYears.add(y));
-            (s.months||[]).forEach(m => gymExpandedMonths.add(m));
-            s.weeks.forEach(w  => gymExpandedWeeks.add(w));
-          } else {
-            localStorage.removeItem("gymView"); // discard old format
-          }
+        const s = reloadKey ? JSON.parse(reloadKey) : savedViews.gym;
+        if (s?.v === 2) {
+          s.years.forEach(y  => gymExpandedYears.add(y));
+          (s.months||[]).forEach(m => gymExpandedMonths.add(m));
+          s.weeks.forEach(w  => gymExpandedWeeks.add(w));
         }
       }
 
@@ -993,15 +989,27 @@
       gymExpandedWeeks.has(week) ? gymExpandedWeeks.delete(week) : gymExpandedWeeks.add(week);
       renderGym();
     }
-    function saveGymView() {
-      localStorage.setItem("gymView", JSON.stringify({
+    async function saveGymView() {
+      savedViews.gym = {
         v: 2,
         years:  [...gymExpandedYears],
         months: [...gymExpandedMonths],
         weeks:  [...gymExpandedWeeks],
-      }));
+      };
       const btn = [...document.querySelectorAll(".save-btn")].find(b => b.textContent.trim() === "Save View");
-      if (btn) { btn.textContent = "Saved ✓"; setTimeout(() => btn.textContent = "Save View", 1500); }
+      await saveViewsToGist(btn);
+    }
+
+    // Persist savedViews to the Gist so views follow the user across devices
+    async function saveViewsToGist(btn) {
+      if (btn) btn.textContent = "Saving…";
+      const cfg = decryptedConfig || await getDecryptedConfig(null);
+      const ok  = cfg ? await patchGist({ "views.json": { content: JSON.stringify(savedViews, null, 2) } }, cfg.gh_pat) : false;
+      if (btn) {
+        btn.textContent = ok ? "Saved ✓" : "Save failed";
+        setTimeout(() => btn.textContent = "Save View", 1500);
+      }
+      return ok;
     }
 
     // ── init ──────────────────────────────────────────────────────────────────
@@ -1024,6 +1032,7 @@
         meParsed     = parse("me.json");
         momParsed    = parse("mom.json");
         staticWeight = parse("weight_data.json");
+        savedViews   = parse("views.json");
       } else {
         const [meRes, momRes, weightRes] = await Promise.all([
           fetch("me.json"          + cacheBust).catch(() => null),
@@ -1052,6 +1061,12 @@
         mom: (momParsed.data || (Array.isArray(momParsed) ? momParsed : [])).filter(r => r.date >= STEPS_FROM),
       };
       weightData = staticWeight || {};
+
+      // Migrate views saved on this device before views.json existed
+      try {
+        if (!savedViews.gym   && localStorage.getItem("gymView"))   savedViews.gym   = JSON.parse(localStorage.getItem("gymView"));
+        if (!savedViews.steps && localStorage.getItem("stepsView")) savedViews.steps = JSON.parse(localStorage.getItem("stepsView"));
+      } catch {}
 
       // Global max for fixed Y axis
       for (const r of [...(allData.me||[]), ...(allData.mom||[])].filter(r => r.date >= STEPS_FROM))
@@ -1397,18 +1412,11 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         expandedYears.clear(); expandedMonths.clear(); expandedWeeks.clear();
         const reloadKey = localStorage.getItem("stepsViewReload");
         if (reloadKey) { localStorage.removeItem("stepsViewReload"); }
-        const saved = reloadKey || localStorage.getItem("stepsView");
-        if (saved) {
-          const s = JSON.parse(saved);
-          if (s.v === 1) {
-            s.years.forEach(y => expandedYears.add(y));
-            s.months.forEach(m => expandedMonths.add(m));
-            s.weeks.forEach(w => expandedWeeks.add(w));
-          } else {
-            localStorage.removeItem("stepsView");
-            for (const r of [...(allData.me||[]), ...(allData.mom||[])])
-              expandedYears.add(r.date.slice(0,4));
-          }
+        const s = reloadKey ? JSON.parse(reloadKey) : savedViews.steps;
+        if (s?.v === 1) {
+          s.years.forEach(y => expandedYears.add(y));
+          s.months.forEach(m => expandedMonths.add(m));
+          s.weeks.forEach(w => expandedWeeks.add(w));
         } else {
           for (const r of [...(allData.me||[]), ...(allData.mom||[])])
             expandedYears.add(r.date.slice(0,4));
@@ -1448,15 +1456,15 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       }));
     }
 
-    function saveStepsView() {
-      localStorage.setItem("stepsView", JSON.stringify({
+    async function saveStepsView() {
+      savedViews.steps = {
         v: 1,
         years:  [...expandedYears],
         months: [...expandedMonths],
         weeks:  [...expandedWeeks],
-      }));
+      };
       const btn = [...document.querySelectorAll(".save-btn")].find(b => b.closest("#panel-dashboard") && b.textContent.trim() === "Save View");
-      if (btn) { btn.textContent = "Saved ✓"; setTimeout(() => btn.textContent = "Save View", 1500); }
+      await saveViewsToGist(btn);
     }
 
     function renderDashboard() {
