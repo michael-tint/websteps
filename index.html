@@ -93,7 +93,7 @@
 
     /* summary cards */
     .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; margin-bottom: 0.6rem; flex-shrink: 0; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.55rem 0.8rem; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.55rem 0.8rem; text-align: center; }
     .card-label { font-size: 0.7rem; color: #64748b; margin-bottom: 0.2rem; text-transform: uppercase; letter-spacing: 0.04em; }
     .card-value { font-size: 1.15rem; font-weight: 700; color: #f8fafc; }
     .card-value.blue  { color: #60a5fa; }
@@ -1474,7 +1474,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const end   = document.getElementById(`${user}-end`).value;
       const momSteps = new Map((allData.mom||[]).map(r=>[r.date, r.steps||0]));
       const meSteps  = new Map((allData.me ||[]).map(r=>[r.date, r.steps||0]));
-      const momBeat  = date => (momSteps.get(date)||0) > (meSteps.get(date)||0);
+      const momBeat  = date => { const me = meSteps.get(date)||0; return me > 0 && (momSteps.get(date)||0) > me; };
       const momBeatOnly = document.getElementById(`${user}-mom-beat`)?.checked;
       let rows = (allData[user]||[]).filter(r=>(!start||r.date>=start)&&(!end||r.date<=end));
       if (momBeatOnly) rows = rows.filter(r => momBeat(r.date));
