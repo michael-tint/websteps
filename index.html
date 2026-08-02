@@ -195,6 +195,7 @@
   <div id="panel-dashboard" class="panel">
     <div class="controls">
       <button class="save-btn" onclick="saveStepsView()">Save View</button>
+      <button class="save-btn" id="steps-chart-only-btn" onclick="toggleChartOnly(this,'panel-dashboard')">Chart Only</button>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
         <span style="font-size:0.75rem;color:#64748b">From</span>
         <input type="date" id="steps-from" oninput="render()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
@@ -221,7 +222,7 @@
   <div id="panel-gym" class="panel active">
     <div class="controls">
       <button class="save-btn" onclick="saveGymView()">Save View</button>
-      <button class="save-btn" id="gym-chart-only-btn" onclick="toggleGymChartOnly(this)">Chart Only</button>
+      <button class="save-btn" id="gym-chart-only-btn" onclick="toggleChartOnly(this,'panel-gym')">Chart Only</button>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
         <span style="font-size:0.75rem;color:#64748b">From</span>
         <input type="date" id="gym-from" oninput="renderGym()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
@@ -1002,12 +1003,14 @@
       await saveViewsToGist(btn);
     }
 
-    // Gym chart is cramped next to the fixed-width table — let it take the full row
-    function toggleGymChartOnly(btn) {
-      const main = document.querySelector("#panel-gym .dash-main");
+    // Charts are cramped next to the fixed-width table — let one take the full row
+    function toggleChartOnly(btn, panelId) {
+      const main = document.querySelector(`#${panelId} .dash-main`);
       const chartOnly = main.classList.toggle("chart-only");
       btn.textContent = chartOnly ? "Show Table" : "Chart Only";
-      if (gymChart) gymChart.resize();
+      const canvas = main.querySelector("canvas");
+      const chart  = canvas && Chart.getChart(canvas);
+      if (chart) chart.resize();
     }
 
     // Persist savedViews to the Gist so views follow the user across devices
