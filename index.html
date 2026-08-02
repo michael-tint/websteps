@@ -96,6 +96,9 @@
     .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.55rem 0.8rem; }
     .card-label { font-size: 0.7rem; color: #64748b; margin-bottom: 0.2rem; text-transform: uppercase; letter-spacing: 0.04em; }
     .card-value { font-size: 1.15rem; font-weight: 700; color: #f8fafc; }
+    .trend { font-size: 0.75em; margin-left: 0.35rem; vertical-align: 0.08em; }
+    .trend.up   { color: #4ade80; }
+    .trend.down { color: #f87171; }
     .card-value.blue  { color: #60a5fa; }
     .card-value.pink  { color: #f472b6; }
     .card-value.green { color: #4ade80; }
@@ -1494,11 +1497,30 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       await saveViewsToGist(btn);
     }
 
+    // Arrow comparing the two most recent weeks that actually have steps
+    function stepsTrend(rows) {
+      const byWeek = {};
+      for (const r of rows) {
+        if (r.steps == null) continue;
+        const w = stepsWeekStart(r.date);
+        (byWeek[w] = byWeek[w] || []).push(r.steps);
+      }
+      const weeks = Object.keys(byWeek).filter(w => byWeek[w].some(v => v > 0)).sort();
+      if (weeks.length < 2) return "";
+      const avg  = w => byWeek[w].reduce((s, v) => s + v, 0) / byWeek[w].length;
+      const cur  = avg(weeks[weeks.length - 1]);
+      const prev = avg(weeks[weeks.length - 2]);
+      const diff = cur - prev;
+      if (Math.round(diff) === 0) return "";
+      const up = diff > 0;
+      return `<span class="trend ${up ? "up" : "down"}" title="${fmt(cur)} vs ${fmt(prev)} steps/day (week of ${weeks[weeks.length-1]} vs ${weeks[weeks.length-2]})">${up ? "▲" : "▼"}</span>`;
+    }
+
     function renderDashboard() {
       const meAll = (allData.me||[]).filter(r => r.date >= STEPS_FROM), momAll = (allData.mom||[]).filter(r => r.date >= STEPS_FROM);
       document.getElementById("dash-cards").innerHTML = `
-        <div class="card"><div class="card-label">Me - Avg</div><div class="card-value blue">${fmt(avgSteps(meAll))}</div></div>
-        <div class="card"><div class="card-label">Mom - Avg</div><div class="card-value pink">${fmt(avgSteps(momAll))}</div></div>
+        <div class="card"><div class="card-label">Me - Avg</div><div class="card-value blue">${fmt(avgSteps(meAll))}${stepsTrend(meAll)}</div></div>
+        <div class="card"><div class="card-label">Mom - Avg</div><div class="card-value pink">${fmt(avgSteps(momAll))}${stepsTrend(momAll)}</div></div>
       `;
       render();
     }
