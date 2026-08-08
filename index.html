@@ -1517,23 +1517,30 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       await saveViewsToGist(btn);
     }
 
-    // Arrow comparing the two most recent weeks that actually have steps
+    // Arrow comparing the current week's steps/day against the all-time average
+    // shown on the same card. The current week is still in progress, so it is a
+    // partial week measured against the full-history average. If it hasn't synced
+    // yet, fall back to the most recent week that has data. An all-zero week
+    // means "not worn", not "no steps", so it doesn't count as data either way.
     function stepsTrend(rows) {
+      const avgAll = avgSteps(rows);
+      if (avgAll == null) return "";
       const byWeek = {};
       for (const r of rows) {
         if (r.steps == null) continue;
-        const w = stepsWeekStart(r.date);
-        (byWeek[w] = byWeek[w] || []).push(r.steps);
+        (byWeek[stepsWeekStart(r.date)] ||= []).push(r.steps);
       }
       const weeks = Object.keys(byWeek).filter(w => byWeek[w].some(v => v > 0)).sort();
-      if (weeks.length < 2) return "";
-      const avg  = w => byWeek[w].reduce((s, v) => s + v, 0) / byWeek[w].length;
-      const cur  = avg(weeks[weeks.length - 1]);
-      const prev = avg(weeks[weeks.length - 2]);
-      const diff = cur - prev;
+      if (!weeks.length) return "";
+      const curWeek = stepsWeekStart(todayEST());
+      const week    = weeks.includes(curWeek) ? curWeek : weeks[weeks.length - 1];
+      const vals    = byWeek[week];
+      const cur     = vals.reduce((s, v) => s + v, 0) / vals.length;
+      const diff    = cur - avgAll;
       if (Math.round(diff) === 0) return "";
       const up = diff > 0;
-      return `<span class="trend ${up ? "up" : "down"}" title="${fmt(cur)} vs ${fmt(prev)} steps/day (week of ${weeks[weeks.length-1]} vs ${weeks[weeks.length-2]})">${up ? "▲" : "▼"}</span>`;
+      const when = week === curWeek ? "this week" : `week of ${week}`;
+      return `<span class="trend ${up ? "up" : "down"}" title="${fmt(cur)} steps/day ${when} vs ${fmt(avgAll)} average">${up ? "▲" : "▼"}</span>`;
     }
 
     function renderDashboard() {
