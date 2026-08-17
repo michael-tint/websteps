@@ -96,6 +96,7 @@
     .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.55rem 0.8rem; }
     .card-label { font-size: 0.7rem; color: #64748b; margin-bottom: 0.2rem; text-transform: uppercase; letter-spacing: 0.04em; }
     .card-value { font-size: 1.15rem; font-weight: 700; color: #f8fafc; }
+    .card-sub { font-size: 0.68rem; font-weight: 500; color: #64748b; margin-left: 0.35rem; white-space: nowrap; }
     .trend { font-size: 0.75em; margin-left: 0.35rem; vertical-align: 0.08em; }
     .trend.up   { color: #4ade80; }
     .trend.down { color: #f87171; }
@@ -1517,30 +1518,45 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       await saveViewsToGist(btn);
     }
 
-    // Arrow comparing the current week's steps/day against the all-time average
-    // shown on the same card. The current week is still in progress, so it is a
-    // partial week measured against the full-history average. If it hasn't synced
-    // yet, fall back to the most recent week that has data. An all-zero week
-    // means "not worn", not "no steps", so it doesn't count as data either way.
-    function stepsTrend(rows) {
-      const avgAll = avgSteps(rows);
-      if (avgAll == null) return "";
+    // The week to summarize: the current week if it has synced, otherwise the
+    // most recent week that has data. An all-zero week means "not worn", not
+    // "no steps", so it doesn't count as data either way.
+    function latestStepsWeek(rows) {
       const byWeek = {};
       for (const r of rows) {
         if (r.steps == null) continue;
         (byWeek[stepsWeekStart(r.date)] ||= []).push(r.steps);
       }
       const weeks = Object.keys(byWeek).filter(w => byWeek[w].some(v => v > 0)).sort();
-      if (!weeks.length) return "";
+      if (!weeks.length) return null;
       const curWeek = stepsWeekStart(todayEST());
       const week    = weeks.includes(curWeek) ? curWeek : weeks[weeks.length - 1];
       const vals    = byWeek[week];
-      const cur     = vals.reduce((s, v) => s + v, 0) / vals.length;
-      const diff    = cur - avgAll;
+      const total   = vals.reduce((s, v) => s + v, 0);
+      return { week, isCurrent: week === curWeek, days: vals.length, total, avg: total / vals.length };
+    }
+
+    // Arrow comparing the summarized week's steps/day against the all-time average
+    // shown on the same card. The current week is still in progress, so it is a
+    // partial week measured against the full-history average.
+    function stepsTrend(rows) {
+      const avgAll = avgSteps(rows);
+      if (avgAll == null) return "";
+      const wk = latestStepsWeek(rows);
+      if (!wk) return "";
+      const diff = wk.avg - avgAll;
       if (Math.round(diff) === 0) return "";
       const up = diff > 0;
-      const when = week === curWeek ? "this week" : `week of ${week}`;
-      return `<span class="trend ${up ? "up" : "down"}" title="${fmt(cur)} steps/day ${when} vs ${fmt(avgAll)} average">${up ? "▲" : "▼"}</span>`;
+      const when = wk.isCurrent ? "this week" : `week of ${wk.week}`;
+      return `<span class="trend ${up ? "up" : "down"}" title="${fmt(wk.avg)} steps/day ${when} vs ${fmt(avgAll)} average">${up ? "▲" : "▼"}</span>`;
+    }
+
+    function weekCard(name, rows, color) {
+      const wk = latestStepsWeek(rows);
+      if (!wk) return `<div class="card"><div class="card-label">${name} - Week</div><div class="card-value ${color}">—</div></div>`;
+      const label = wk.isCurrent ? `${name} - This Week` : `${name} - Week of ${labelWeek(wk.week)}`;
+      const title = `${fmt(wk.total)} steps over ${wk.days} day${wk.days === 1 ? "" : "s"} (week of ${wk.week})`;
+      return `<div class="card" title="${title}"><div class="card-label">${label}</div><div class="card-value ${color}">${fmt(wk.avg)}<span class="card-sub">/day · ${fmt(wk.total)} total</span></div></div>`;
     }
 
     function renderDashboard() {
@@ -1548,6 +1564,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       document.getElementById("dash-cards").innerHTML = `
         <div class="card"><div class="card-label">Me - Avg</div><div class="card-value blue">${fmt(avgSteps(meAll))}${stepsTrend(meAll)}</div></div>
         <div class="card"><div class="card-label">Mom - Avg</div><div class="card-value pink">${fmt(avgSteps(momAll))}${stepsTrend(momAll)}</div></div>
+        ${weekCard("Me", meAll, "blue")}
+        ${weekCard("Mom", momAll, "pink")}
       `;
       render();
     }
