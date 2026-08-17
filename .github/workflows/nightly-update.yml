@@ -2,40 +2,36 @@ name: Nightly Fitbit update
 
 on:
   schedule:
-    # 12:15am America/New_York — both UTC offsets covered; the guard step
-    # below skips whichever firing isn't in the midnight hour ET.
-    - cron: "15 4 * * *"   # 00:15 EDT (summer)
-    - cron: "15 5 * * *"   # 00:15 EST (winter)
+    # 02:15 EDT (summer) / 01:15 EST (winter) — a single firing that is already
+    # past local midnight under BOTH UTC offsets, so no hour guard is needed.
+    #
+    # The previous setup used two crons (04:15/05:15 UTC) plus a step that
+    # skipped unless the ET hour was exactly "00". GitHub delays scheduled runs
+    # 1–4 hours under load, so the 04:15 firing usually landed at ET hour 01+
+    # and skipped, while the 05:15 firing is 01:15 EDT and so skipped every day
+    # all summer. Most nights nothing ran, and the runs still reported success
+    # because skipping is success. Starting late and never guarding is strictly
+    # better: a delay just pushes the run further into the same ET day.
+    - cron: "15 6 * * *"
   workflow_dispatch: {}
 
 jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - name: Skip unless midnight hour in ET
-        if: github.event_name == 'schedule'
-        run: |
-          hour=$(TZ=America/New_York date +%H)
-          echo "ET hour: $hour"
-          if [ "$hour" != "00" ]; then
-            echo "Not the midnight-hour firing — skipping."
-            echo "SKIP=1" >> "$GITHUB_ENV"
-          fi
+      - name: Report ET time
+        run: echo "ET now: $(TZ=America/New_York date '+%Y-%m-%d %H:%M')"
 
       - uses: actions/checkout@v4
-        if: env.SKIP != '1'
 
       - uses: actions/setup-python@v5
-        if: env.SKIP != '1'
         with:
           python-version: "3.12"
 
       - name: Install dependencies
-        if: env.SKIP != '1'
         run: pip install cryptography
 
       - name: Run update
-        if: env.SKIP != '1'
         env:
           WEBSTEPS_PASSWORD: ${{ secrets.WEBSTEPS_PASSWORD }}
         run: python nightly_update.py
