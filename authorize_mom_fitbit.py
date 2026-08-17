@@ -133,6 +133,20 @@ print(f"New token: {new_token[:16]}...")
 print(f"Scopes granted: {tokens.get('scope', 'unknown')}")
 
 # ── Update encrypted config on Gist only (single source of truth) ────────────
+# Re-read the Gist first: the browser flow above can take minutes, and another
+# writer may have rotated the *other* user's token in the meantime. Writing the
+# copy we read at startup would brick it.
+try:
+    req  = urllib.request.Request(f"https://api.github.com/gists/{gist_id}",
+                                  headers={"Accept": "application/vnd.github+json"})
+    gist = json.loads(urllib.request.urlopen(req).read())
+    fresh_config = json.loads(gist["files"]["config.json"]["content"])
+    creds        = decrypt(fresh_config["encryptedBlob"], fresh_config["salt"], fresh_config["iv"])
+    app_config   = {**app_config, **fresh_config}
+    print("Re-read fresh config from Gist before writing.")
+except Exception as e:
+    print(f"Could not re-read Gist ({e}); writing the config read at startup.")
+
 creds["momCreds"]["refresh_token"] = new_token
 blob, salt, iv = encrypt(creds)
 app_config["encryptedBlob"] = blob
