@@ -5,7 +5,8 @@ Runs in GitHub Actions on a schedule. For each user (me, mom):
   1. Read the live config from the Gist and decrypt it (password from
      WEBSTEPS_PASSWORD env var).
   2. Refresh the Fitbit token (rotates the one-time-use refresh token).
-  3. Fetch activity / heart rate / weight and merge into {user}.json.
+  3. Fetch activity / heart rate from Fitbit, and (for "me") weight from the
+     Google Health API, then merge into {user}.json.
   4. Write the rotated tokens (re-encrypted config) and both data files
      back to the Gist in a single PATCH.
 
@@ -69,7 +70,69 @@ def fitbit_get(url, access_token):
         return {}
 
 
-def update_user(user, creds, records):
+GOOGLE_HEALTH_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly"
+
+
+def fetch_google_weights(google_creds, start, end):
+    """{'YYYY-MM-DD': lb} for [start, end] inclusive, or None if the fetch failed.
+
+    The stored refresh token carries both the Google Health scope and the legacy
+    fitness.body.read. Google Health rejects any access token holding a Fit scope
+    with 403 DISALLOWED_OAUTH_SCOPES, so this narrows the grant to the Health
+    scope alone (RFC 6749 §6). Without the `scope` field below, every weight
+    fetch 403s and weight silently stops updating.
+    """
+    try:
+        tokens = http_json(
+            "https://oauth2.googleapis.com/token",
+            data=urllib.parse.urlencode({
+                "client_id": google_creds["client_id"],
+                "client_secret": google_creds["client_secret"],
+                "refresh_token": google_creds["refresh_token"],
+                "grant_type": "refresh_token",
+                "scope": GOOGLE_HEALTH_SCOPE,
+            }).encode(),
+            method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    except urllib.error.HTTPError as e:
+        print(f"  google token refresh failed: HTTP {e.code}: {e.read().decode()}")
+        return None
+    access = tokens["access_token"]
+
+    # civil_time is the weigh-in's local wall-clock date, which is how records
+    # are keyed; the upper bound is exclusive, so ask for the day after `end`.
+    flt = (f'weight.sample_time.civil_time >= "{start}" AND '
+           f'weight.sample_time.civil_time < "{end + timedelta(days=1)}"')
+    by_date, page_token = {}, ""
+    while True:
+        params = {"pageSize": "200", "filter": flt}
+        if page_token:
+            params["pageToken"] = page_token
+        url = ("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints?"
+               + urllib.parse.urlencode(params))
+        try:
+            page = http_json(url, headers={"Authorization": f"Bearer {access}"})
+        except urllib.error.HTTPError as e:
+            print(f"  google health weight fetch failed: HTTP {e.code}: {e.read().decode()}")
+            return None
+        for p in page.get("dataPoints", []):
+            w = p.get("weight") or {}
+            cd = ((w.get("sampleTime") or {}).get("civilTime") or {}).get("date")
+            if not cd or w.get("weightGrams") is None:
+                continue
+            iso = f"{cd['year']:04d}-{cd['month']:02d}-{cd['day']:02d}"
+            lb = round(float(w["weightGrams"]) / 453.59237, 1)
+            # Several points can share a day (re-weighs, duplicate sources);
+            # keep the lowest, matching the old Fitbit weight merge.
+            if iso not in by_date or lb < by_date[iso]:
+                by_date[iso] = lb
+        page_token = page.get("nextPageToken") or ""
+        if not page_token:
+            return by_date
+
+
+def update_user(user, creds, records, google_creds=None):
     """Refresh token, fetch data, merge into records. Mutates creds and records."""
     auth = base64.b64encode(f"{creds['client_id']}:{creds['client_secret']}".encode()).decode()
     try:
@@ -120,12 +183,18 @@ def update_user(user, creds, records):
         if rhr:
             store(e["dateTime"], "restingHeartRate", rhr)
 
-    wt = fitbit_get("https://api.fitbit.com/1/user/-/body/log/weight/date/today/30d.json", access)
-    for e in wt.get("weight", []):
-        w = round(float(e["weight"]), 1)
-        cur = by_date.get(e["date"], {}).get("weight")
-        if cur is None or w < cur:
-            by_date.setdefault(e["date"], {})["weight"] = w
+    # Weight comes from Google Health, not Fitbit — the scale stopped feeding
+    # Fitbit's weight log on 2026-08-03. Only "me" has a Google account. The
+    # 30-day window matches the old Fitbit fetch so a run of missed days
+    # backfills itself instead of only ever catching the last week.
+    if google_creds:
+        weights = fetch_google_weights(google_creds, today - timedelta(days=30), today)
+        if weights is None:
+            print("  weight unavailable this run; activity still merged")
+        for d, w in (weights or {}).items():
+            cur = by_date.get(d, {}).get("weight")
+            if cur is None or w < cur:
+                by_date.setdefault(d, {})["weight"] = w
 
     by_date.setdefault(today.isoformat(), {})  # always create today's entry
 
@@ -165,7 +234,8 @@ def main():
             results[user] = False
             continue
         records = load_records(f"{user}.json")
-        results[user] = update_user(user, creds, records)
+        results[user] = update_user(user, creds, records,
+                                    cfg.get("googleCreds") if user == "me" else None)
         if results[user]:
             payload[f"{user}.json"] = {"content": json.dumps({"data": records}, indent=2)}
 

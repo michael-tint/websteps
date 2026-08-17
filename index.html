@@ -1777,9 +1777,20 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       setStatus("Fetching heart rate…");
       const hrData = await fitbitGet(`https://api.fitbit.com/1/user/-/activities/heart/date/${startDate}/${yesterday}.json`);
       for (const e of hrData["activities-heart"] || []) { const rhr = e.value?.restingHeartRate; if (rhr) store(e.dateTime, "restingHeartRate", rhr); }
-      setStatus("Fetching weight…");
-      const wtData = await fitbitGet(`https://api.fitbit.com/1/user/-/body/log/weight/date/today/30d.json`);
-      for (const e of wtData.weight || []) { const w = Math.round(parseFloat(e.weight) * 10) / 10; if (!byDate[e.date]?.weight || w < byDate[e.date].weight) { byDate[e.date] = byDate[e.date] || {}; byDate[e.date].weight = w; } }
+      // Weight comes from Google Health, not Fitbit — the scale stopped feeding
+      // Fitbit's weight log on 2026-08-03. Only "me" has a Google account.
+      if (dataKey === "me" && cfg.googleCreds) {
+        setStatus("Fetching weight…");
+        // 30-day window like the old Fitbit weight fetch, so a stretch of missed
+        // days backfills itself rather than only ever catching the last week.
+        const _w30 = new Date(_ty, _tm - 1, _td - 30);
+        const wtFrom = `${_w30.getFullYear()}-${String(_w30.getMonth()+1).padStart(2,"0")}-${String(_w30.getDate()).padStart(2,"0")}`;
+        const weights = await fetchGoogleWeights(cfg.googleCreds, wtFrom, today);
+        if (weights === null) setStatus("Weight fetch failed — steps still saved", "#facc15");
+        for (const [d, w] of Object.entries(weights || {})) {
+          if (!byDate[d]?.weight || w < byDate[d].weight) { byDate[d] = byDate[d] || {}; byDate[d].weight = w; }
+        }
+      }
       byDate[today] = byDate[today] || {};  // always create today's entry
       for (const [d, fields] of Object.entries(byDate)) {
         const ex = records.find(r => r.date === d);
@@ -1809,6 +1820,59 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (btn) btn.disabled = false;
       if (!skipReload) setTimeout(() => { saveViewForReload(); stashFreshData(); location.reload(); }, 1200);
       return true;
+    }
+
+    // ── Google Health weight ──────────────────────────────────────────────────
+    // Returns { "YYYY-MM-DD": lb } for [from, to] inclusive, or null on failure
+    // (so the caller can tell "no weigh-ins" apart from "the fetch broke").
+    //
+    // The stored refresh token was granted both the Google Health scope and the
+    // legacy fitness.body.read. Google Health rejects ANY access token carrying
+    // a Fit scope with 403 DISALLOWED_OAUTH_SCOPES, so the refresh below asks
+    // for the Health scope alone — RFC 6749 §6 scope narrowing, which Google
+    // honours. Without that `scope` parameter every weight fetch 403s.
+    const GOOGLE_HEALTH_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
+
+    async function fetchGoogleWeights(googleCreds, from, to) {
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id:     googleCreds.client_id,
+          client_secret: googleCreds.client_secret,
+          refresh_token: googleCreds.refresh_token,
+          grant_type:    "refresh_token",
+          scope:         GOOGLE_HEALTH_SCOPE,
+        }),
+      }).catch(() => null);
+      if (!tokenRes?.ok) { console.error("Google token refresh failed", tokenRes?.status); return null; }
+      const access = (await tokenRes.json()).access_token;
+
+      // civil_time is the local wall-clock date of the weigh-in, which is what
+      // we key records by; the upper bound is exclusive, so pass the day after.
+      const next = (iso) => { const [y,m,d] = iso.split("-").map(Number); const dt = new Date(y, m-1, d+1); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`; };
+      const filter = `weight.sample_time.civil_time >= "${from}" AND weight.sample_time.civil_time < "${next(to)}"`;
+      const byDate = {};
+      let pageToken = "";
+      do {
+        const url = `https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints`
+                  + `?pageSize=200&filter=${encodeURIComponent(filter)}`
+                  + (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "");
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${access}` } }).catch(() => null);
+        if (!res?.ok) { console.error("Google Health weight fetch failed", res?.status, await res?.json().catch(() => null)); return null; }
+        const page = await res.json();
+        for (const p of page.dataPoints || []) {
+          const cd = p.weight?.sampleTime?.civilTime?.date;
+          if (!cd || p.weight?.weightGrams == null) continue;
+          const iso = `${cd.year}-${String(cd.month).padStart(2,"0")}-${String(cd.day).padStart(2,"0")}`;
+          const lb  = Math.round(p.weight.weightGrams / 453.59237 * 10) / 10;
+          // Several points can share a day (re-weighs, duplicate sources); keep
+          // the lowest, matching how the old Fitbit weight merge behaved.
+          if (byDate[iso] == null || lb < byDate[iso]) byDate[iso] = lb;
+        }
+        pageToken = page.nextPageToken || "";
+      } while (pageToken);
+      return byDate;
     }
 
     async function updateFitbitMe(btn, statusEl) {
