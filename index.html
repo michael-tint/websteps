@@ -1039,10 +1039,9 @@
       let meParsed, momParsed, staticWeight;
       const gistId = appConfig?.gistId;
       if (gistId) {
-        // api.github.com is not CDN-cached — always returns the live token
-        const gistRes = await fetch(`https://api.github.com/gists/${gistId}`).catch(() => null);
-        const gist    = gistRes?.ok ? await gistRes.json() : null;
-        const parse   = (name) => { try { return JSON.parse(gist?.files?.[name]?.content || "{}"); } catch { return {}; } };
+        // Cache-busted: a stale gist body here means a stale refresh token
+        const gist  = await fetchGistLive(gistId);
+        const parse = (name) => { try { return JSON.parse(gist?.files?.[name]?.content || "{}"); } catch { return {}; } };
         if (gist?.files?.["config.json"]) {
           try { appConfig = { ...appConfig, ...parse("config.json") }; } catch {}
         }
@@ -1652,12 +1651,23 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       }
     }
 
+    // Read the Gist bypassing every cache. api.github.com isn't CDN-cached, but
+    // it does send `Cache-Control: private, max-age=60`, so a plain fetch can be
+    // answered from the browser's own cache with a body up to a minute old. For
+    // refresh tokens that is long enough to do real damage: two rotations inside
+    // the same minute can each read the same pre-rotation token, and the second
+    // write-back then stores a token the first rotation already burned — which
+    // is exactly how `me` got bricked on 2026-08-16.
+    async function fetchGistLive(gistId) {
+      const res = await fetch(`https://api.github.com/gists/${gistId}?t=${Date.now()}`, { cache: "no-store" }).catch(() => null);
+      return res?.ok ? res.json().catch(() => null) : null;
+    }
+
     async function reloadGistConfig() {
       const gistId = appConfig?.gistId;
       if (!gistId) return false;
-      const res = await fetch(`https://api.github.com/gists/${gistId}`).catch(() => null);
-      if (!res?.ok) return false;
-      const gist = await res.json();
+      const gist = await fetchGistLive(gistId);
+      if (!gist) return false;
       const content = gist?.files?.["config.json"]?.content;
       if (!content) return false;
       try { appConfig = { ...appConfig, ...JSON.parse(content) }; decryptedConfig = null; return true; } catch { return false; }
