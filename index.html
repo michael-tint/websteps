@@ -96,7 +96,6 @@
     .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.55rem 0.8rem; }
     .card-label { font-size: 0.7rem; color: #64748b; margin-bottom: 0.2rem; text-transform: uppercase; letter-spacing: 0.04em; }
     .card-value { font-size: 1.15rem; font-weight: 700; color: #f8fafc; }
-    .card-sub { font-size: 0.68rem; font-weight: 500; color: #64748b; margin-left: 0.35rem; white-space: nowrap; }
     .trend { font-size: 0.75em; margin-left: 0.35rem; vertical-align: 0.08em; }
     .trend.up   { color: #4ade80; }
     .trend.down { color: #f87171; }
@@ -1555,7 +1554,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (!wk) return `<div class="card"><div class="card-label">${name} - Week</div><div class="card-value ${color}">—</div></div>`;
       const label = wk.isCurrent ? `${name} - This Week` : `${name} - Week of ${labelWeek(wk.week)}`;
       const title = `${fmt(wk.total)} steps over ${wk.days} day${wk.days === 1 ? "" : "s"} (week of ${wk.week})`;
-      return `<div class="card" title="${title}"><div class="card-label">${label}</div><div class="card-value ${color}">${fmt(wk.avg)}<span class="card-sub">/day · ${fmt(wk.total)} total</span></div></div>`;
+      return `<div class="card" title="${title}"><div class="card-label">${label}</div><div class="card-value ${color}">${fmt(wk.avg)}</div></div>`;
     }
 
     function renderDashboard() {
