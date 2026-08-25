@@ -12,7 +12,7 @@ Runs in GitHub Actions on a schedule. For each user (me, mom):
 
 Mirrors updateFitbit() in index.html — keep the two in sync.
 """
-import base64, json, os, sys, urllib.error, urllib.parse, urllib.request
+import base64, json, os, sys, time, urllib.error, urllib.parse, urllib.request
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -210,9 +210,16 @@ def update_user(user, creds, records, google_creds=None):
     return True
 
 
+def read_gist():
+    """Live read. The `cb` param and no-cache header defeat any edge caching, so
+    a token another writer stored seconds ago is never read stale."""
+    return http_json(
+        f"https://api.github.com/gists/{GIST_ID}?cb={int(time.time())}",
+        headers={"Accept": "application/vnd.github+json", "Cache-Control": "no-cache"})
+
+
 def main():
-    gist = http_json(f"https://api.github.com/gists/{GIST_ID}",
-                     headers={"Accept": "application/vnd.github+json"})
+    gist = read_gist()
     files = gist["files"]
     app_config = json.loads(files["config.json"]["content"])
     cfg = decrypt(app_config["encryptedBlob"], app_config["salt"], app_config["iv"])
@@ -238,6 +245,22 @@ def main():
                                     cfg.get("googleCreds") if user == "me" else None)
         if results[user]:
             payload[f"{user}.json"] = {"content": json.dumps({"data": records}, indent=2)}
+
+    # Re-read the Gist before writing. This run takes a while, and another
+    # writer (the browser Update button, an authorize script) may have stored a
+    # new token meanwhile — writing back the copy read at startup would silently
+    # revert it. Only the Fitbit tokens this run actually rotated are carried
+    # over; everything else, googleCreds included, comes from the fresh copy.
+    try:
+        fresh_app = json.loads(read_gist()["files"]["config.json"]["content"])
+        fresh_cfg = decrypt(fresh_app["encryptedBlob"], fresh_app["salt"], fresh_app["iv"])
+        for user, creds_key in (("me", "meCreds"), ("mom", "momCreds")):
+            if results.get(user) and creds_key in fresh_cfg:
+                fresh_cfg[creds_key]["refresh_token"] = cfg[creds_key]["refresh_token"]
+        cfg, app_config = fresh_cfg, {**app_config, **fresh_app}
+        print("Re-read fresh config from Gist before writing.")
+    except Exception as e:
+        print(f"Could not re-read Gist ({e}); writing the config read at startup.")
 
     # Always save the config — a successful token refresh rotates the refresh
     # token even if a later fetch step failed, and losing it bricks the token.
