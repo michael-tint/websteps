@@ -1916,16 +1916,15 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
     async function connectGoogleHealth() {
       const cfg = await getDecryptedConfig(null);
-      // Reuse the stored client on a re-auth (e.g. a token that expired); only
-      // ask for the client_id/secret when googleCreds is missing entirely.
-      let clientId     = cfg?.googleCreds?.client_id;
-      let clientSecret = cfg?.googleCreds?.client_secret;
-      if (!clientId || !clientSecret) {
-        clientId = (prompt("Google OAuth Client ID:") || "").trim();
-        if (!clientId) return;
-        clientSecret = (prompt("Google OAuth Client Secret:") || "").trim();
-        if (!clientSecret) return;
-      }
+      // Always show the client id/secret (pre-filled with any stored value) so
+      // they can be confirmed or changed. Silently reusing a stored client is
+      // exactly how you get stuck on redirect_uri_mismatch — the redirect URI
+      // must be registered on whichever client is used, so let the user point
+      // this at the client whose console they actually control.
+      const clientId = (prompt("Google OAuth Client ID:", cfg?.googleCreds?.client_id || "") || "").trim();
+      if (!clientId) return;
+      const clientSecret = (prompt("Google OAuth Client Secret:", cfg?.googleCreds?.client_secret || "") || "").trim();
+      if (!clientSecret) return;
       // redirect_uri must be registered VERBATIM on the OAuth client. Show it so
       // it can be added before continuing (Google 400s on a mismatch otherwise).
       const redirectUri = location.origin + location.pathname;
