@@ -294,6 +294,8 @@
   <!-- WEIGHT -->
   <div id="panel-weight" class="panel">
     <div class="controls">
+      <button id="google-connect-btn" onclick="connectGoogleHealth()" title="Re-authorize the Google Health account that weight is pulled from"
+              style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.7rem;font-size:0.82rem;cursor:pointer;">Connect Google Health</button>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
         <span style="font-size:0.75rem;color:#64748b">From</span>
         <input type="date" id="weight-from" oninput="renderWeight()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.5rem;font-size:0.82rem;">
@@ -1058,6 +1060,10 @@
         momParsed    = (momRes?.ok)    ? await momRes.json()    : {};
         staticWeight = (weightRes?.ok) ? await weightRes.json() : {};
       }
+      // If Google redirected back here with an auth code, finish connecting
+      // (exchange the code, save googleCreds to the Gist) and reload clean.
+      if (await handleGoogleOAuthReturn()) return;
+
       // Data stashed just before a post-update reload is newer than anything the
       // Gist API can return (its reads can lag a fresh PATCH by a few seconds)
       try {
@@ -1898,6 +1904,80 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         pageToken = page.nextPageToken || "";
       } while (pageToken);
       return byDate;
+    }
+
+    // ── Connect Google Health (browser OAuth, no local script needed) ─────────
+    // Runs the authorization-code flow in-page: bounce to Google, come back with
+    // ?code=…, exchange it for a refresh token, and save googleCreds to the Gist.
+    // The one thing only the account owner can do — logging into Google — happens
+    // in their own browser. Reuses the same oauth2.googleapis.com call the weight
+    // refresh already makes, so CORS is known-good.
+    const GOOGLE_CONNECT_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
+
+    async function connectGoogleHealth() {
+      const cfg = await getDecryptedConfig(null);
+      // Reuse the stored client on a re-auth (e.g. a token that expired); only
+      // ask for the client_id/secret when googleCreds is missing entirely.
+      let clientId     = cfg?.googleCreds?.client_id;
+      let clientSecret = cfg?.googleCreds?.client_secret;
+      if (!clientId || !clientSecret) {
+        clientId = (prompt("Google OAuth Client ID:") || "").trim();
+        if (!clientId) return;
+        clientSecret = (prompt("Google OAuth Client Secret:") || "").trim();
+        if (!clientSecret) return;
+      }
+      // redirect_uri must be registered VERBATIM on the OAuth client. Show it so
+      // it can be added before continuing (Google 400s on a mismatch otherwise).
+      const redirectUri = location.origin + location.pathname;
+      if (!confirm("This exact URL must be listed under 'Authorized redirect URIs' on your "
+                 + "Google OAuth client:\n\n" + redirectUri + "\n\nClick OK to continue to Google.")) return;
+      sessionStorage.setItem("googleConnect", JSON.stringify({ clientId, clientSecret, redirectUri }));
+      location.href = "https://accounts.google.com/o/oauth2/v2/auth?response_type=code"
+        + "&client_id="    + encodeURIComponent(clientId)
+        + "&redirect_uri=" + encodeURIComponent(redirectUri)
+        + "&scope="        + encodeURIComponent(GOOGLE_CONNECT_SCOPE)
+        // offline + consent are what actually return a refresh_token; false keeps
+        // the grant to the Health scope alone (a lingering Fit scope 403s weight).
+        + "&access_type=offline&prompt=consent&include_granted_scopes=false";
+    }
+
+    async function handleGoogleOAuthReturn() {
+      const params  = new URLSearchParams(location.search);
+      const code    = params.get("code");
+      const oauthErr = params.get("error");
+      const pending = sessionStorage.getItem("googleConnect");
+      if ((!code && !oauthErr) || !pending) return false;
+      sessionStorage.removeItem("googleConnect");
+      const clean = location.pathname;
+      const { clientId, clientSecret, redirectUri } = JSON.parse(pending);
+      if (oauthErr) { alert("Google authorization was cancelled: " + oauthErr); history.replaceState(null, "", clean); return false; }
+      try {
+        const res = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret,
+                                      redirect_uri: redirectUri, grant_type: "authorization_code" }),
+        });
+        if (!res.ok) { alert("Google token exchange failed (" + res.status + "):\n" + await res.text()); history.replaceState(null, "", clean); return false; }
+        const tokens = await res.json();
+        if (!tokens.refresh_token) {
+          alert("Google returned no refresh token. Revoke this app at "
+              + "myaccount.google.com/permissions, then click Connect again.");
+          history.replaceState(null, "", clean); return false;
+        }
+        const cfg = await getDecryptedConfig(null);
+        if (!cfg) { alert("Couldn't decrypt the config to save the Google credentials."); history.replaceState(null, "", clean); return false; }
+        cfg.googleCreds = { client_id: clientId, client_secret: clientSecret, refresh_token: tokens.refresh_token };
+        const ok = await encryptAndSaveConfig(cfg, null);
+        if (!ok) { alert("Saving the Google credentials to the Gist failed."); history.replaceState(null, "", clean); return false; }
+        alert("Google Health connected. Reloading — then press Update to pull weight.");
+        location.replace(clean);
+        return true;
+      } catch (e) {
+        alert("Google connect error: " + e);
+        history.replaceState(null, "", clean);
+        return false;
+      }
     }
 
     async function updateFitbitMe(btn, statusEl) {
