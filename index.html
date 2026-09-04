@@ -1810,7 +1810,23 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
       // 3. Save rotated token to config, then data (no creds in user files)
       setStatus("Saving…");
-      const configSaved = await encryptAndSaveConfig(cfg, setStatus);
+      // Re-read the live config immediately before writing. This in-memory copy
+      // was decrypted at page load and may predate a field another writer added
+      // (this is how googleCreds got wiped: a stale tab wrote a config that
+      // never had it) or hold a stale token for the OTHER user. Carry only the
+      // token THIS update rotated onto the fresh copy, mirroring the
+      // re-read-before-write guard in the Python authorize/nightly scripts.
+      const rotatedToken = creds.refresh_token;
+      let cfgToSave = cfg;
+      if (await reloadGistConfig()) {
+        const freshCfg = await getDecryptedConfig(setStatus);
+        if (freshCfg) {
+          const freshCreds = dataKey === "me" ? freshCfg.meCreds : freshCfg.momCreds;
+          if (freshCreds) freshCreds.refresh_token = rotatedToken;
+          cfgToSave = freshCfg;
+        }
+      }
+      const configSaved = await encryptAndSaveConfig(cfgToSave, setStatus);
       if (!configSaved) { if (btn) btn.disabled = false; return; }
       const dataOk = await saveUserData(dataKey, pat);
       if (!dataOk) { if (setStatus) setStatus("Save failed", "#f87171"); if (btn) btn.disabled = false; return; }
