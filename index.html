@@ -1558,7 +1558,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     function weekCard(name, rows, color) {
       const wk = latestStepsWeek(rows);
       if (!wk) return `<div class="card"><div class="card-label">${name} - Week</div><div class="card-value ${color}">—</div></div>`;
-      const label = wk.isCurrent ? `${name} - This Week` : `${name} - Week of ${labelWeek(wk.week)}`;
+      const label = wk.isCurrent ? `${name} - This Week` : `${name} - ${labelWeek(wk.week)}`;
       const title = `${fmt(wk.total)} steps over ${wk.days} day${wk.days === 1 ? "" : "s"} (week of ${wk.week})`;
       return `<div class="card" title="${title}"><div class="card-label">${label}</div><div class="card-value ${color}">${fmt(wk.avg)}</div></div>`;
     }
