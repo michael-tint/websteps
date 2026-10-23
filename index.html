@@ -1240,6 +1240,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     function labelDay(iso)  { const [y,m,d]=iso.split("-"); return new Date(+y,+m-1,+d).toLocaleString("default",{month:"short",day:"numeric"}); }
 
     // ── reference average (next level up) ────────────────────────────────────
+    // Months here are the bars' week-based months (stepsWeekStart), not
+    // calendar months — e.g. Oct 1–3, 2026 sit in the week of Sep 27, so they
+    // count toward September and Q3, matching the September bar.
     function computeRef(user, item) {
       const rows = (allData[user] || []).filter(r => r.date >= STEPS_FROM);
       if (item.type === 'year') {
@@ -1249,13 +1252,12 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         const [y, m] = item.key.split('-');
         const qStart = Math.floor((+m-1)/3)*3+1;
         return avgSteps(rows.filter(r => {
-          if (!r.date.startsWith(y)) return false;
-          const mo = +r.date.slice(5,7);
-          return mo >= qStart && mo < qStart+3;
+          const [ry, rm] = stepsWeekStart(r.date).split('-');
+          return ry === y && +rm >= qStart && +rm < qStart+3;
         }));
       }
       if (item.type === 'week') {
-        return avgSteps(rows.filter(r => r.date.startsWith(item.monthKey)));
+        return avgSteps(rows.filter(r => stepsWeekStart(r.date).slice(0,7) === item.monthKey));
       }
       if (item.type === 'day') {
         return avgSteps(rows.filter(r => stepsWeekStart(r.date) === item.weekKey));
