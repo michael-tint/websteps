@@ -88,6 +88,8 @@
     #panel-me th:nth-child(2), #panel-me td:nth-child(2),
     #panel-mom th:nth-child(2), #panel-mom td:nth-child(2) { text-align: left; }
     .skip-cb { cursor: pointer; }
+    /* raw tabs: header widths (RAW_COLS w) fix the columns so Me and Mom line up */
+    #panel-me table, #panel-mom table { table-layout: fixed; }
     input[type=date] { background: #1e293b; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; padding: 0.28rem 0.55rem; font-size: 0.82rem; }
 
     .save-btn { background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 6px; padding: 0.28rem 0.8rem; font-size: 0.82rem; cursor: pointer; }
@@ -344,13 +346,17 @@
     let expandedWeeks    = new Set();
     let stepsInitialized = false;
 
+    // w is the column width in rem, shared by the Me and Mom tables so they line
+    // up exactly; sized to fit the header or widest value, plus some slack.
+    // Auto layout sized columns to each user's own data, so they shifted
+    // between tabs. Extra room on a wide screen is spread proportionally.
     const RAW_COLS = [
-      {key:"date",label:"Date"},{key:"steps",label:"Steps"},{key:"caloriesOut",label:"Calories"},
-      {key:"activityCalories",label:"Active Cal"},{key:"caloriesBMR",label:"BMR"},
-      {key:"restingHeartRate",label:"Heart Rate"},{key:"sedentaryMinutes",label:"Sedentary"},
-      {key:"lightlyActiveMinutes",label:"Light"},{key:"fairlyActiveMinutes",label:"Moderate"},
-      {key:"veryActiveMinutes",label:"Vigorous"},{key:"floors",label:"Floors"},
-      {key:"weight",label:"Weight"},
+      {key:"date",label:"Date",w:7},{key:"steps",label:"Steps",w:4.5},{key:"caloriesOut",label:"Calories",w:5.25},
+      {key:"activityCalories",label:"Active Cal",w:6},{key:"caloriesBMR",label:"BMR",w:3.75},
+      {key:"restingHeartRate",label:"Heart Rate",w:6.25},{key:"sedentaryMinutes",label:"Sedentary",w:6.25},
+      {key:"lightlyActiveMinutes",label:"Light",w:4},{key:"fairlyActiveMinutes",label:"Moderate",w:5.75},
+      {key:"veryActiveMinutes",label:"Vigorous",w:5.5},{key:"floors",label:"Floors",w:4.5},
+      {key:"weight",label:"Weight",w:4.75},
     ];
 
     // ── gym tab ───────────────────────────────────────────────────────────────
@@ -1122,7 +1128,8 @@
           document.getElementById(`${user}-start`).value = dates[0];
           document.getElementById(`${user}-end`).value   = dates[dates.length-1];
         }
-        document.getElementById(`raw-head-${user}`).innerHTML = `<th title="Don't count this day's steps">Skip</th>` + RAW_COLS.map(c=>`<th>${c.label}</th>`).join("") + `<th></th>`;
+        document.getElementById(`raw-head-${user}`).innerHTML = `<th style="width:3.5rem" title="Don't count this day's steps">Skip</th>`
+          + RAW_COLS.map(c=>`<th style="width:${c.w}rem">${c.label}</th>`).join("") + `<th style="width:3rem"></th>`;
       }
       renderDashboard();
 
