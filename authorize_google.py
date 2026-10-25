@@ -130,9 +130,12 @@ auth_url = (
     f"&redirect_uri={urllib.parse.quote(REDIRECT_URI)}"
     f"&scope={urllib.parse.quote(SCOPES)}"
     # offline + consent together are what actually return a refresh_token;
-    # without prompt=consent Google reissues access tokens only.
+    # without prompt=consent Google reissues access tokens only. select_account
+    # forces the chooser: the default browser is already signed in as me, and
+    # without it Google consents as whoever is already signed in and files the
+    # token under the other user's key with nothing looking wrong.
     f"&access_type=offline"
-    f"&prompt=consent"
+    f"&prompt={urllib.parse.quote('select_account consent')}"
     f"&include_granted_scopes=false"
 )
 
@@ -156,7 +159,18 @@ server = HTTPServer(("", 8080), Handler)
 t = Thread(target=server.handle_request)
 t.start()
 
-print("\nOpening browser for Google authorization...")
+print("")
+print("Opening your default browser. Pick " + USER.upper() + "'s Google account in")
+print("the chooser - 'Use another account' if it is not listed.")
+print("")
+print("To use a private window instead (cleanest when the browser is already")
+print("signed in as someone else), paste this URL into it:")
+print("")
+print(f"  {auth_url}")
+print("")
+print("Either way it must be a browser on THIS machine - the redirect goes to")
+print("http://localhost:8080, which this script is listening on.")
+print("")
 webbrowser.open(auth_url)
 print("Waiting for redirect...")
 t.join()
