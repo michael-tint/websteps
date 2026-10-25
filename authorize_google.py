@@ -1,6 +1,15 @@
 """
 authorize_google.py — OAuth flow to get a new Google Health refresh token.
 
+    python authorize_google.py [me|mom]      (default: me)
+
+Fitbit's Web API is turned off on 2026-11-02; each account's data moves to
+Google Health when that account re-consents, and its new data stops appearing
+in the legacy Fitbit API from then on. Every user therefore needs their own
+Google consent — sign in as THAT person's Google account in the browser window
+this opens. `me` is stored as googleCreds (weight + steps), `mom` as
+momGoogleCreds (steps only; mom has no weight data).
+
 Weight comes from the Google Health API (the scale stopped feeding Fitbit's
 weight log on 2026-08-03). That refresh token is long-lived but not immortal:
 when it is revoked or expires, every weight fetch returns
@@ -15,7 +24,7 @@ client in the Google Cloud console. If authorization fails with
 `redirect_uri_mismatch`, add it there (APIs & Services -> Credentials -> the
 client -> Authorized redirect URIs) and re-run.
 """
-import base64, json, os, urllib.error, urllib.parse, urllib.request, webbrowser
+import base64, json, os, sys, urllib.error, urllib.parse, urllib.request, webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 
@@ -27,10 +36,21 @@ _dir = os.path.dirname(os.path.abspath(__file__))
 PASSWORD = b"websteps123"
 ITERS    = 100_000
 
-# Ask for the Health scope alone. The old token also carried the legacy
-# fitness.body.read, and Google Health rejects any access token holding a Fit
-# scope with 403 DISALLOWED_OAUTH_SCOPES.
-SCOPES = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly"
+# Ask only for what this user's data needs. Google Health rejects an access
+# token carrying a disallowed scope (403 DISALLOWED_OAUTH_SCOPES) — the old
+# token's legacy fitness.body.read is what broke weight — so the fetchers
+# narrow the grant again per request (RFC 6749 §6). Asking for both here is
+# safe because of that narrowing.
+METRICS_SCOPE  = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly"
+ACTIVITY_SCOPE = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly"
+
+USER = (sys.argv[1] if len(sys.argv) > 1 else "me").lower()
+if USER not in ("me", "mom"):
+    print(f"Unknown user {USER!r}. Usage: python authorize_google.py [me|mom]")
+    exit(1)
+# mom has no weight data, ever — steps only.
+SCOPES   = " ".join([ACTIVITY_SCOPE] if USER == "mom" else [METRICS_SCOPE, ACTIVITY_SCOPE])
+CRED_KEY = "googleCreds" if USER == "me" else f"{USER}GoogleCreds"
 
 def derive_key(salt):
     kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=ITERS)
@@ -75,7 +95,10 @@ except Exception as e:
     print(f"Could not fetch Gist config ({e}), using local.")
 
 creds  = decrypt(app_config["encryptedBlob"], app_config["salt"], app_config["iv"])
-google = creds.get("googleCreds") or {}
+# The OAuth client is the app, shared by both users; only the account that
+# consents in the browser differs. Fall back to me's client for a first-time
+# mom run, which has no momGoogleCreds yet.
+google = creds.get(CRED_KEY) or creds.get("googleCreds") or {}
 # Bootstrap path: if googleCreds was wiped from the config (e.g. a stale browser
 # tab wrote back a copy that never had it), the client_id/secret can be supplied
 # via env vars from a freshly created Google Cloud OAuth client. Kept out of the
@@ -90,7 +113,12 @@ if not CLIENT_ID or not CLIENT_SECRET:
           "  GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… python authorize_google.py")
     exit(1)
 pat           = creds["gh_pat"]
+print(f"Authorizing {USER} -> {CRED_KEY}")
 print(f"Using client_id: {CLIENT_ID}")
+print(f"Scopes requested: {SCOPES}")
+print("")
+print(f">>> Sign in as {USER.upper()}'s Google account in the browser window. <<<")
+print("")
 
 # ── Build auth URL and open browser ───────────────────────────────────────────
 REDIRECT_URI = "http://localhost:8080"
@@ -184,10 +212,10 @@ except Exception as e:
 
 # setdefault so a bootstrap run (googleCreds absent from the fresh config) also
 # persists the client_id/secret, not just the refresh token.
-creds.setdefault("googleCreds", {})
-creds["googleCreds"]["client_id"]     = CLIENT_ID
-creds["googleCreds"]["client_secret"] = CLIENT_SECRET
-creds["googleCreds"]["refresh_token"] = new_token
+creds.setdefault(CRED_KEY, {})
+creds[CRED_KEY]["client_id"]     = CLIENT_ID
+creds[CRED_KEY]["client_secret"] = CLIENT_SECRET
+creds[CRED_KEY]["refresh_token"] = new_token
 blob, salt, iv = encrypt(creds)
 app_config["encryptedBlob"] = blob
 app_config["salt"]          = salt

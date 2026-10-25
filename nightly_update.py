@@ -70,7 +70,8 @@ def fitbit_get(url, access_token):
         return {}
 
 
-GOOGLE_HEALTH_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly"
+GOOGLE_HEALTH_SCOPE   = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly"
+GOOGLE_ACTIVITY_SCOPE = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly"
 
 
 def fetch_google_weights(google_creds, start, end):
@@ -132,6 +133,71 @@ def fetch_google_weights(google_creds, start, end):
             return by_date
 
 
+def google_access_token(google_creds, scope):
+    """Access token narrowed to one scope, or None. Google Health 403s a token
+    carrying a scope it doesn't allow, so never ask for more than this call
+    needs (RFC 6749 §6 narrowing, which Google honours)."""
+    try:
+        return http_json(
+            "https://oauth2.googleapis.com/token",
+            data=urllib.parse.urlencode({
+                "client_id": google_creds["client_id"],
+                "client_secret": google_creds["client_secret"],
+                "refresh_token": google_creds["refresh_token"],
+                "grant_type": "refresh_token",
+                "scope": scope,
+            }).encode(),
+            method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )["access_token"]
+    except urllib.error.HTTPError as e:
+        print(f"  google token refresh failed: HTTP {e.code}: {e.read().decode()}")
+        return None
+
+
+def fetch_google_steps(google_creds, start, end):
+    """{'YYYY-MM-DD': steps} for [start, end] inclusive, or None if the fetch
+    failed — so the caller can tell "walked nowhere" from "the fetch broke".
+
+    Replaces Fitbit's activities/steps time series, which stops serving a user
+    once their account migrates to Google Health and dies outright 2026-11-02.
+    dailyRollUp buckets by civil (local wall-clock) date, which is how records
+    are keyed, and reconciles DST and timezone moves server-side.
+    """
+    access = google_access_token(google_creds, GOOGLE_ACTIVITY_SCOPE)
+    if not access:
+        return None
+
+    span = (end - start).days
+    if span > 89:                      # the API caps a rollup range at 90 days
+        start = end - timedelta(days=89)
+    civil = lambda d, h, m, sec: {"date": {"year": d.year, "month": d.month, "day": d.day},
+                                  "time": {"hours": h, "minutes": m, "seconds": sec}}
+    body = {"range": {"start": civil(start, 0, 0, 0), "end": civil(end, 23, 59, 59)},
+            "windowSizeDays": 1}
+
+    by_date, page_token = {}, ""
+    while True:
+        payload = dict(body, pageToken=page_token) if page_token else body
+        try:
+            page = http_json(
+                "https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp",
+                data=json.dumps(payload).encode(), method="POST",
+                headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"})
+        except urllib.error.HTTPError as e:
+            print(f"  google health steps fetch failed: HTTP {e.code}: {e.read().decode()}")
+            return None
+        for pt in page.get("rollupDataPoints", []):
+            cd = (pt.get("civilStartTime") or {}).get("date")
+            n  = (pt.get("steps") or {}).get("countSum")     # a string
+            if not cd or n is None:
+                continue
+            by_date[f"{cd['year']:04d}-{cd['month']:02d}-{cd['day']:02d}"] = int(n)
+        page_token = page.get("nextPageToken") or ""
+        if not page_token:
+            return by_date
+
+
 def update_user(user, creds, records, google_creds=None):
     """Refresh token, fetch data, merge into records. Mutates creds and records."""
     auth = base64.b64encode(f"{creds['client_id']}:{creds['client_secret']}".encode()).decode()
@@ -184,10 +250,10 @@ def update_user(user, creds, records, google_creds=None):
             store(e["dateTime"], "restingHeartRate", rhr)
 
     # Weight comes from Google Health, not Fitbit — the scale stopped feeding
-    # Fitbit's weight log on 2026-08-03. Only "me" has a Google account. The
-    # 30-day window matches the old Fitbit fetch so a run of missed days
-    # backfills itself instead of only ever catching the last week.
-    if google_creds:
+    # Fitbit's weight log on 2026-08-03. Only "me" is weighed; mom has no weight
+    # data, ever. The 30-day window matches the old Fitbit fetch so a run of
+    # missed days backfills itself instead of only ever catching the last week.
+    if google_creds and user == "me":
         weights = fetch_google_weights(google_creds, today - timedelta(days=30), today)
         if weights is None:
             print("  weight unavailable this run; activity still merged")
@@ -195,6 +261,19 @@ def update_user(user, creds, records, google_creds=None):
             cur = by_date.get(d, {}).get("weight")
             if cur is None or w < cur:
                 by_date.setdefault(d, {})["weight"] = w
+
+    # Steps from Google Health override Fitbit's, last word wins. Fitbit serves
+    # a migrated account nothing but zeros and is turned off 2026-11-02, so once
+    # a user has consented this is the real source and the loop above is just a
+    # fallback until then.
+    if google_creds:
+        gsteps = fetch_google_steps(google_creds, start, yesterday)
+        if gsteps is None:
+            print("  google steps unavailable this run; keeping Fitbit's figures")
+        else:
+            print(f"  google health: {len(gsteps)} day(s) of steps")
+        for d, n in (gsteps or {}).items():
+            by_date.setdefault(d, {})["steps"] = n
 
     by_date.setdefault(today.isoformat(), {})  # always create today's entry
 
@@ -241,8 +320,9 @@ def main():
             results[user] = False
             continue
         records = load_records(f"{user}.json")
-        results[user] = update_user(user, creds, records,
-                                    cfg.get("googleCreds") if user == "me" else None)
+        results[user] = update_user(
+            user, creds, records,
+            cfg.get("googleCreds" if user == "me" else f"{user}GoogleCreds"))
         if results[user]:
             payload[f"{user}.json"] = {"content": json.dumps({"data": records}, indent=2)}
 

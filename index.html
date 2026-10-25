@@ -1969,7 +1969,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       for (const e of hrData["activities-heart"] || []) { const rhr = e.value?.restingHeartRate; if (rhr) store(e.dateTime, "restingHeartRate", rhr); }
       // Weight comes from Google Health, not Fitbit — the scale stopped feeding
       // Fitbit's weight log on 2026-08-03. Only "me" has a Google account.
-      if (dataKey === "me" && cfg.googleCreds) {
+      const googleCreds = dataKey === "me" ? cfg.googleCreds : cfg[`${dataKey}GoogleCreds`];
+      if (dataKey === "me" && googleCreds) {
         setStatus("Fetching weight…");
         // 30-day window like the old Fitbit weight fetch, so a stretch of missed
         // days backfills itself rather than only ever catching the last week.
@@ -1980,6 +1981,15 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         for (const [d, w] of Object.entries(weights || {})) {
           if (!byDate[d]?.weight || w < byDate[d].weight) { byDate[d] = byDate[d] || {}; byDate[d].weight = w; }
         }
+      }
+      // Steps from Google Health override Fitbit's, last word wins — once a
+      // user has consented this is the real source and the loop above is just a
+      // fallback until Fitbit's API is turned off on 2026-11-02.
+      if (googleCreds) {
+        setStatus("Fetching steps from Google Health…");
+        const gsteps = await fetchGoogleSteps(googleCreds, startDate, yesterday);
+        if (gsteps === null) setStatus("Google steps fetch failed — Fitbit's figures kept", "#facc15");
+        for (const [d, n] of Object.entries(gsteps || {})) { byDate[d] = byDate[d] || {}; byDate[d].steps = n; }
       }
       byDate[today] = byDate[today] || {};  // always create today's entry
       for (const [d, fields] of Object.entries(byDate)) {
@@ -2037,7 +2047,60 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     // a Fit scope with 403 DISALLOWED_OAUTH_SCOPES, so the refresh below asks
     // for the Health scope alone — RFC 6749 §6 scope narrowing, which Google
     // honours. Without that `scope` parameter every weight fetch 403s.
-    const GOOGLE_HEALTH_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
+    const GOOGLE_HEALTH_SCOPE   = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
+    const GOOGLE_ACTIVITY_SCOPE = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly";
+
+    // Steps from Google Health. Twin of fetch_google_steps() in
+    // nightly_update.py — change both. Fitbit serves a migrated account nothing
+    // but zeros and is turned off 2026-11-02; dailyRollUp buckets by civil
+    // (local wall-clock) date, which is how records are keyed, and reconciles
+    // DST and timezone moves server-side. Returns null if the fetch broke, so
+    // the caller can tell that from "walked nowhere".
+    async function fetchGoogleSteps(googleCreds, from, to) {
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id:     googleCreds.client_id,
+          client_secret: googleCreds.client_secret,
+          refresh_token: googleCreds.refresh_token,
+          grant_type:    "refresh_token",
+          scope:         GOOGLE_ACTIVITY_SCOPE,
+        }),
+      }).catch(() => null);
+      if (!tokenRes?.ok) { console.error("Google token refresh failed", tokenRes?.status); return null; }
+      const access = (await tokenRes.json()).access_token;
+
+      const parts  = iso => iso.split("-").map(Number);
+      const asDate = iso => { const [y,m,d] = parts(iso); return new Date(y, m-1, d); };
+      const toIso  = dt  => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+      if ((asDate(to) - asDate(from)) / 86400000 > 89) {   // the API caps a rollup range at 90 days
+        const [y,m,d] = parts(to);
+        from = toIso(new Date(y, m-1, d-89));
+      }
+      const civil = (iso,h,m,sec) => { const [y,mo,d] = parts(iso); return { date:{year:y,month:mo,day:d}, time:{hours:h,minutes:m,seconds:sec} }; };
+      const body = { range: { start: civil(from,0,0,0), end: civil(to,23,59,59) }, windowSizeDays: 1 };
+
+      const byDate = {};
+      let pageToken = "";
+      do {
+        const res = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+          body: JSON.stringify(pageToken ? { ...body, pageToken } : body),
+        }).catch(() => null);
+        if (!res?.ok) { console.error("Google Health steps fetch failed", res?.status, await res?.json().catch(() => null)); return null; }
+        const page = await res.json();
+        for (const pt of page.rollupDataPoints || []) {
+          const cd = pt.civilStartTime?.date;
+          const n  = pt.steps?.countSum;      // a string
+          if (!cd || n == null) continue;
+          byDate[`${cd.year}-${String(cd.month).padStart(2,"0")}-${String(cd.day).padStart(2,"0")}`] = parseInt(n, 10);
+        }
+        pageToken = page.nextPageToken || "";
+      } while (pageToken);
+      return byDate;
+    }
 
     async function fetchGoogleWeights(googleCreds, from, to) {
       const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
