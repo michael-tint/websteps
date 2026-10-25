@@ -485,7 +485,7 @@
       const meSkippedSteps = {};
       for (const r of allData.me || []) {
         meByDate[r.date] = countedSteps(r); meWeightByDate[r.date] = r.weight;
-        if (r.excludeSteps) meSkippedSteps[r.date] = effSteps(r);
+        if (isSkipped(r)) meSkippedSteps[r.date] = effSteps(r);
       }
 
       // All entries from weightData, oldest first for tree building
@@ -1237,7 +1237,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     // countedSteps answers both at once. Prefer countedSteps; reach for
     // effSteps only where a skipped day still has to show its number.
     function effSteps(r)     { return r ? r.manualSteps ?? r.steps ?? null : null; }
-    function countedSteps(r) { return r && !r.excludeSteps ? effSteps(r) : null; }
+    function isSkipped(r)    { return !!r?.excludeSteps && r?.manualSteps == null; }
+    function countedSteps(r) { return r ? (isSkipped(r) ? null : effSteps(r)) : null; }
     function avgSteps(rows) {
       const v=rows.map(countedSteps).filter(n=>n!=null);
       return v.length ? v.reduce((s,n)=>s+n,0)/v.length : null;
@@ -1333,7 +1334,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
             const days = mergeKeys(meD, momD);
             for (const day of days)
               items.push({ type:"day", key:day, label:labelDay(day), me:effSteps(meD[day]), mom:effSteps(momD[day]),
-                           meExcl:!!meD[day]?.excludeSteps, momExcl:!!momD[day]?.excludeSteps,
+                           meExcl:isSkipped(meD[day]), momExcl:isSkipped(momD[day]),
                            meMan:meD[day]?.manualSteps!=null, momMan:momD[day]?.manualSteps!=null,
                            weekKey:week, monthKey:month });
           }
@@ -1664,12 +1665,12 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         const r = byDate.get(date) || { date };
         const isSat = new Date(r.date + "T12:00:00").getDay() === 6;
         const cs = isSat ? ' style="border-top:2px solid #64748b"' : '';
-        const skip = `<td${cs}><input type="checkbox" class="skip-cb" title="Don't count this day's steps"${r.excludeSteps ? " checked" : ""} onchange="toggleExcludeSteps('${user}','${r.date}',this.checked)"></td>`;
+        const skip = `<td${cs}><input type="checkbox" class="skip-cb" title="Don't count this day's steps"${isSkipped(r) ? " checked" : ""} onchange="toggleExcludeSteps('${user}','${r.date}',this.checked)"></td>`;
         const cells = RAW_COLS.map(c => {
           if (c.key !== "steps") return `<td${cs}>${r[c.key]??"—"}</td>`;
           // Steps shows what the day is worth; hover gives Fitbit's own figure back
           const manual = r.manualSteps != null;
-          const cls = [r.excludeSteps ? "excl" : "", manual ? "manual" : ""].filter(Boolean).join(" ");
+          const cls = [isSkipped(r) ? "excl" : "", manual ? "manual" : ""].filter(Boolean).join(" ");
           return `<td${cs}${cls ? ` class="${cls}"` : ""}${manual ? ` title="Fitbit: ${r.steps ?? "—"}"` : ""}>${effSteps(r) ?? "—"}</td>`
                + `<td${cs}><input class="w-input steps-manual" type="text" value="${manual ? r.manualSteps : ""}"
                    data-date="${r.date}" data-field="manual-steps-${user}" placeholder="—"
@@ -1849,8 +1850,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (added) records.sort((a, b) => a.date < b.date ? -1 : 1);
     }
 
-    function queueDayEdit(user, date, field, value) {
-      (dayEdits[user][date] = dayEdits[user][date] || {})[field] = value;
+    function queueDayEdit(user, date, patch) {
+      Object.assign(dayEdits[user][date] = dayEdits[user][date] || {}, patch);
       try { sessionStorage.setItem("dayEdits", JSON.stringify({ ts: Date.now(), edits: dayEdits })); } catch {}
       applyDayEdits(allData[user], dayEdits[user]);
       if (!dayEditsSaveQueued) {          // an already-queued save will carry this edit too
@@ -1864,7 +1865,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     function toggleExcludeSteps(user, date, checked) {
-      queueDayEdit(user, date, "excludeSteps", checked);
+      queueDayEdit(user, date, checked ? { excludeSteps: true, manualSteps: null } : { excludeSteps: false });
     }
 
     // Blank clears the override and hands the day back to Fitbit
@@ -1875,9 +1876,12 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         n = Math.round(parseFloat(text.replace(/,/g, "")));
         if (!isFinite(n) || n < 0) { renderRaw(user); return; }  // junk: put the box back
       }
-      const cur = (allData[user] || []).find(r => r.date === date)?.manualSteps ?? null;
-      if (cur === n) return;   // includes "blank on a day that has no record": nothing to do
-      queueDayEdit(user, date, "manualSteps", n);
+      const rec = (allData[user] || []).find(r => r.date === date);
+      const cur = rec?.manualSteps ?? null;
+      // unchanged, and no stale Skip tick left to clear — includes "blank on a
+      // day that has no record"
+      if (cur === n && !(n != null && rec?.excludeSteps)) return;
+      queueDayEdit(user, date, n == null ? { manualSteps: null } : { manualSteps: n, excludeSteps: false });
     }
 
     // Write onto a live read of the Gist rather than saving this tab's records
@@ -2217,7 +2221,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const meSkippedSteps = {};
       for (const r of allData.me || []) {
         meByDate[r.date] = countedSteps(r); meWeightByDate[r.date] = r.weight;
-        if (r.excludeSteps) meSkippedSteps[r.date] = effSteps(r);
+        if (isSkipped(r)) meSkippedSteps[r.date] = effSteps(r);
       }
 
       const mergedData = weightData;
