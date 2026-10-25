@@ -1103,8 +1103,8 @@
       } catch {}
 
       allData = {
-        me:  (meParsed.data  || []).filter(r => r.date >= STEPS_FROM),
-        mom: (momParsed.data || (Array.isArray(momParsed) ? momParsed : [])).filter(r => r.date >= STEPS_FROM),
+        me:  (recordsFrom(meParsed)  || []).filter(r => r.date >= STEPS_FROM),
+        mom: (recordsFrom(momParsed) || []).filter(r => r.date >= STEPS_FROM),
       };
       weightData = staticWeight || {};
 
@@ -1825,6 +1825,12 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     let dayEditsSave = null;                // tail of the save chain
     let dayEditsSaveQueued = false;
 
+    function recordsFrom(parsed) {
+      if (Array.isArray(parsed?.data)) return parsed.data;
+      if (Array.isArray(parsed))       return parsed;
+      return null;
+    }
+
     function applyDayEdits(records, edits) {
       const byDate = new Map(records.map(r => [r.date, r]));
       let added = false;
@@ -1883,16 +1889,21 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       dayEditsSaveQueued = false;
       const cfg  = decryptedConfig || await getDecryptedConfig(null);
       const gist = cfg && await fetchGistLive(appConfig?.gistId, cfg.gh_pat);
-      const files = {};
+      const files = {}, unreadable = [];
       for (const user of ["me", "mom"]) {
         if (!Object.keys(dayEdits[user]).length) continue;
-        let records = null;
-        try { records = JSON.parse(gist.files[`${user}.json`].content).data; } catch {}
-        if (!records) { alert("Couldn't read the Gist — the day's edit wasn't saved."); return; }
+        let parsed = null;
+        try { parsed = JSON.parse(gist.files[`${user}.json`].content); } catch {}
+        const records = recordsFrom(parsed);
+        // One unreadable file must not discard the other user's edits
+        if (!records) { unreadable.push(`${user}.json`); continue; }
         applyDayEdits(records, dayEdits[user]);
         files[`${user}.json`] = { content: JSON.stringify({ data: records }, null, 2) };
       }
-      if (!await patchGist(files, cfg.gh_pat)) alert("Failed to save the day's edit.");
+      if (Object.keys(files).length && !await patchGist(files, cfg.gh_pat)) {
+        alert("Failed to save the day's edit."); return;
+      }
+      if (unreadable.length) alert(`Couldn't read ${unreadable.join(" and ")} from the Gist — those edits weren't saved.`);
     }
 
     // ── Fitbit update ─────────────────────────────────────────────────────────
