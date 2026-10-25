@@ -63,6 +63,7 @@
     }
     .w-input.w-weight { width: 7ch; }
     .w-input.w-comp   { width: 8ch; }
+    .w-input.steps-override { width: 7ch; }
     .w-input.gym-input {
       width: 100%;
       text-align: left;
@@ -173,6 +174,8 @@
     td.me  { color: #60a5fa; font-weight: 600; }
     td.mom { color: #f472b6; font-weight: 600; }
     tr.mom-beat > td { background: rgba(244,114,182,0.14); }
+    /* a steps cell whose value came from a manual override, not Fitbit */
+    td.step-overridden { color: #fbbf24; font-weight: 600; }
     .status { color: #475569; padding: 1.5rem; text-align: center; }
   </style>
 </head>
@@ -323,6 +326,10 @@
   <script>
     let allData = {};
     let weightData = {};
+    // Manual per-day steps, { me: { "YYYY-MM-DD": n }, mom: {...} } — synced to
+    // steps_overrides.json in the Gist. Kept out of me.json/mom.json so the
+    // nightly Fitbit merge can't clobber them.
+    let stepsOverrides = { me: {}, mom: {} };
     let savedViews = {}; // { gym, steps } — synced to views.json in the Gist
     let meCreds  = null;
     let momCreds = null;
@@ -1035,7 +1042,7 @@
       appConfig = null;
       if (configRes?.ok) { try { appConfig = await configRes.json(); } catch {} }
 
-      let meParsed, momParsed, staticWeight;
+      let meParsed, momParsed, staticWeight, staticOverrides;
       const gistId = appConfig?.gistId;
       if (gistId) {
         // Cache-busted: a stale gist body here means a stale refresh token
@@ -1048,15 +1055,18 @@
         momParsed    = parse("mom.json");
         staticWeight = parse("weight_data.json");
         savedViews   = parse("views.json");
+        staticOverrides = parse("steps_overrides.json");
       } else {
-        const [meRes, momRes, weightRes] = await Promise.all([
+        const [meRes, momRes, weightRes, ovRes] = await Promise.all([
           fetch("me.json"          + cacheBust).catch(() => null),
           fetch("mom.json"         + cacheBust).catch(() => null),
           fetch("weight_data.json" + cacheBust).catch(() => null),
+          fetch("steps_overrides.json" + cacheBust).catch(() => null),
         ]);
         meParsed     = (meRes?.ok)     ? await meRes.json()     : {};
         momParsed    = (momRes?.ok)    ? await momRes.json()    : {};
         staticWeight = (weightRes?.ok) ? await weightRes.json() : {};
+        staticOverrides = (ovRes?.ok)  ? await ovRes.json()     : {};
       }
       // Data stashed just before a post-update reload is newer than anything the
       // Gist API can return (its reads can lag a fresh PATCH by a few seconds)
@@ -1076,6 +1086,11 @@
         mom: (momParsed.data || (Array.isArray(momParsed) ? momParsed : [])).filter(r => r.date >= STEPS_FROM),
       };
       weightData = staticWeight || {};
+      stepsOverrides = {
+        me:  (staticOverrides?.me  && typeof staticOverrides.me  === "object") ? staticOverrides.me  : {},
+        mom: (staticOverrides?.mom && typeof staticOverrides.mom === "object") ? staticOverrides.mom : {},
+      };
+      applyStepsOverrides();
 
       // Migrate views saved on this device before views.json existed
       try {
@@ -1095,7 +1110,8 @@
           document.getElementById(`${user}-start`).value = dates[0];
           document.getElementById(`${user}-end`).value   = dates[dates.length-1];
         }
-        document.getElementById(`raw-head-${user}`).innerHTML = RAW_COLS.map(c=>`<th>${c.label}</th>`).join("") + `<th></th>`;
+        document.getElementById(`raw-head-${user}`).innerHTML =
+          RAW_COLS.map(c=>`<th>${c.label}</th>` + (c.key === "steps" ? `<th>Override</th>` : "")).join("") + `<th></th>`;
       }
       renderDashboard();
 
@@ -1569,6 +1585,77 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     }
 
     // ── raw data tabs ─────────────────────────────────────────────────────────
+    // ── manual steps overrides ────────────────────────────────────────────────
+    // Overrides are folded straight into allData so every consumer — the Me/Mom
+    // tables, the Steps pivot, the charts, the Gym and Weight tabs — sees one
+    // set of numbers. The untouched Fitbit figure is parked on r.fitbitSteps so
+    // clearing an override restores it, and so saves can write it back out.
+    function applyStepsOverrides() {
+      for (const user of ["me", "mom"]) {
+        const ov = stepsOverrides[user] || {};
+        for (const r of allData[user] || []) {
+          if (r.fitbitSteps === undefined) r.fitbitSteps = r.steps ?? null;
+          const v = ov[r.date];
+          if (v == null) {
+            if (r.fitbitSteps == null) delete r.steps;
+            else r.steps = r.fitbitSteps;
+          } else {
+            r.steps = v;
+          }
+        }
+      }
+    }
+
+    // me.json / mom.json hold Fitbit's numbers only — strip the override layer
+    function rowsForSave(rows) {
+      return (rows || []).map(r => {
+        if (r.fitbitSteps === undefined) return r;
+        const { fitbitSteps, ...rest } = r;
+        if (fitbitSteps == null) delete rest.steps;
+        else rest.steps = fitbitSteps;
+        return rest;
+      });
+    }
+
+    let _overrideSaveTimer = null;
+    function saveStepsOverrides() {
+      clearTimeout(_overrideSaveTimer);
+      _overrideSaveTimer = setTimeout(async () => {
+        const cfg = decryptedConfig || await getDecryptedConfig(null);
+        if (!cfg || !appConfig?.gistId) return;
+        const ok = await patchGist(
+          { "steps_overrides.json": { content: JSON.stringify(stepsOverrides, null, 2) } },
+          cfg.gh_pat,
+        );
+        if (!ok) alert("Failed to save the manual steps override.");
+      }, 600);
+    }
+
+    function updateStepsOverride(date, user, value) {
+      const trimmed = String(value).trim();
+      stepsOverrides[user] = stepsOverrides[user] || {};
+      if (trimmed === "") {
+        if (!(date in stepsOverrides[user])) return;   // blank and nothing stored: nothing to do
+        delete stepsOverrides[user][date];
+      } else {
+        const n = Math.round(parseFloat(trimmed.replace(/,/g, "")));
+        if (!isFinite(n) || n < 0) { renderRaw(user); return; }
+        if (stepsOverrides[user][date] === n) return;
+        stepsOverrides[user][date] = n;
+      }
+      applyStepsOverrides();
+      globalMaxSteps = 0;
+      for (const r of [...(allData.me || []), ...(allData.mom || [])].filter(r => r.date >= STEPS_FROM))
+        if (r.steps > globalMaxSteps) globalMaxSteps = r.steps;
+      stepsInitialized = false;
+      renderRaw(user);
+      renderDashboard();
+      render();
+      renderGym();
+      renderWeight();
+      saveStepsOverrides();
+    }
+
     function renderRaw(user) {
       const start = document.getElementById(`${user}-start`).value;
       const end   = document.getElementById(`${user}-end`).value;
@@ -1592,11 +1679,24 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         <div class="card"><div class="card-label">Avg Active Min</div><div class="card-value">${fmt(avg("fairlyActiveMinutes")+avg("veryActiveMinutes"))}</div></div>
       `;
       const tbody = document.getElementById(`${user}-tbody`);
-      if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + 1}" class="status">No data.</td></tr>`; return; }
+      if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + 2}" class="status">No data.</td></tr>`; return; }
       tbody.innerHTML = [...rows].reverse().map(r => {
         const isSat = new Date(r.date + "T12:00:00").getDay() === 6;
         const cs = isSat ? ' style="border-top:2px solid #64748b"' : '';
-        return `<tr${momBeat(r.date)?' class="mom-beat"':''}>${RAW_COLS.map(c=>`<td${cs}>${r[c.key]??"—"}</td>`).join("")}<td${cs}><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
+        const ov = stepsOverrides[user]?.[r.date];
+        const cells = RAW_COLS.map(c => {
+          if (c.key !== "steps")
+            return `<td${cs}>${r[c.key]??"—"}</td>`;
+          // Steps shows what everything else now counts; hover gives Fitbit's own figure
+          const title = ov != null ? ` title="Fitbit: ${r.fitbitSteps ?? "—"}"` : "";
+          const cls   = ov != null ? ' class="step-overridden"' : "";
+          return `<td${cs}${cls}${title}>${r.steps??"—"}</td>`
+               + `<td${cs}><input class="w-input steps-override" type="text" value="${ov ?? ""}"
+                   data-date="${r.date}" data-field="steps-override-${user}" placeholder="—"
+                   onblur="updateStepsOverride('${r.date}','${user}',this.value)"
+                   onkeydown="handleWeightEnter(event,'${r.date}','steps-override-${user}')" /></td>`;
+        }).join("");
+        return `<tr${momBeat(r.date)?' class="mom-beat"':''}>${cells}<td${cs}><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
       }).join("");
     }
 
@@ -1690,7 +1790,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
 
     async function saveUserData(dataKey, pat) {
       const filename = dataKey + ".json";
-      return patchGist({ [filename]: { content: JSON.stringify({ data: allData[dataKey] }, null, 2) } }, pat);
+      return patchGist({ [filename]: { content: JSON.stringify({ data: rowsForSave(allData[dataKey]) }, null, 2) } }, pat);
     }
 
     // ── GitHub Contents API (config.json only) ────────────────────────────────
@@ -1803,10 +1903,17 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       byDate[today] = byDate[today] || {};  // always create today's entry
       for (const [d, fields] of Object.entries(byDate)) {
         const ex = records.find(r => r.date === d);
-        if (ex) { Object.assign(ex, fields); if (!ex.week) ex.week = gymWeekStart(d); }
+        if (ex) {
+          // A fresh Fitbit figure replaces the stashed original, so drop the old
+          // one and let applyStepsOverrides re-stash and re-apply below
+          if ("steps" in fields) delete ex.fitbitSteps;
+          Object.assign(ex, fields);
+          if (!ex.week) ex.week = gymWeekStart(d);
+        }
         else records.push({ date: d, week: gymWeekStart(d), ...fields });
       }
       records.sort((a, b) => a.date < b.date ? -1 : 1);
+      applyStepsOverrides();
 
       // 3. Save rotated token to config, then data (no creds in user files)
       setStatus("Saving…");
