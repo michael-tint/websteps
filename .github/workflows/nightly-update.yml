@@ -20,7 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Report ET time
-        run: echo "ET now: $(TZ=America/New_York date '+%Y-%m-%d %H:%M')"
+        run: |
+          echo "ET now: $(TZ=America/New_York date '+%Y-%m-%d %H:%M')"
 
       - uses: actions/checkout@v4
 

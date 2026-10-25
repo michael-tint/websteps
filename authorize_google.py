@@ -75,12 +75,20 @@ except Exception as e:
     print(f"Could not fetch Gist config ({e}), using local.")
 
 creds  = decrypt(app_config["encryptedBlob"], app_config["salt"], app_config["iv"])
-google = creds.get("googleCreds", {})
-if not google.get("client_id"):
-    print("No googleCreds in config — nothing to authorize.")
+google = creds.get("googleCreds") or {}
+# Bootstrap path: if googleCreds was wiped from the config (e.g. a stale browser
+# tab wrote back a copy that never had it), the client_id/secret can be supplied
+# via env vars from a freshly created Google Cloud OAuth client. Kept out of the
+# repo — pass them on the command line:
+#   GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… python authorize_google.py
+CLIENT_ID     = google.get("client_id")     or os.environ.get("GOOGLE_CLIENT_ID")
+CLIENT_SECRET = google.get("client_secret") or os.environ.get("GOOGLE_CLIENT_SECRET")
+if not CLIENT_ID or not CLIENT_SECRET:
+    print("No Google OAuth client_id/client_secret in config or environment.\n"
+          "Create an OAuth client in the Google Cloud console (with "
+          "http://localhost:8080 as an authorized redirect URI), then re-run:\n"
+          "  GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… python authorize_google.py")
     exit(1)
-CLIENT_ID     = google["client_id"]
-CLIENT_SECRET = google["client_secret"]
 pat           = creds["gh_pat"]
 print(f"Using client_id: {CLIENT_ID}")
 
@@ -174,6 +182,11 @@ try:
 except Exception as e:
     print(f"Could not re-read Gist ({e}); writing the config read at startup.")
 
+# setdefault so a bootstrap run (googleCreds absent from the fresh config) also
+# persists the client_id/secret, not just the refresh token.
+creds.setdefault("googleCreds", {})
+creds["googleCreds"]["client_id"]     = CLIENT_ID
+creds["googleCreds"]["client_secret"] = CLIENT_SECRET
 creds["googleCreds"]["refresh_token"] = new_token
 blob, salt, iv = encrypt(creds)
 app_config["encryptedBlob"] = blob
