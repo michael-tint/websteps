@@ -88,6 +88,7 @@
     #panel-me th:nth-child(2), #panel-me td:nth-child(2),
     #panel-mom th:nth-child(2), #panel-mom td:nth-child(2) { text-align: left; }
     .skip-cb { cursor: pointer; }
+    .w-input.steps-manual { width: 7ch; }
     /* raw tabs: header widths (RAW_COLS w) fix the columns so Me and Mom line up */
     #panel-me table, #panel-mom table { table-layout: fixed; }
     input[type=date] { background: #1e293b; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; padding: 0.28rem 0.55rem; font-size: 0.82rem; }
@@ -180,6 +181,7 @@
     td.mom { color: #f472b6; font-weight: 600; }
     tr.mom-beat > td { background: rgba(244,114,182,0.14); }
     td.excl { text-decoration: line-through; color: #475569; } /* steps of a day ticked Skip */
+    td.manual { color: #fbbf24; font-weight: 600; } /* steps replaced by a manual entry */
     .status { color: #475569; padding: 1.5rem; text-align: center; }
   </style>
 </head>
@@ -470,14 +472,14 @@
       const monthStart = monthStartEST();
 
       // Steps and weight lookup from me.json. A day ticked Skip keeps its entry
-      // (the filter below tests raw r.steps), so gym counts and weight are
-      // unchanged — only its steps drop out of the averages.
+      // (the filter below tests effSteps, which ignores Skip), so gym counts and
+      // weight are unchanged — only its steps drop out of the averages.
       const meByDate = {};
       const meWeightByDate = {};
       const meSkippedSteps = {};
       for (const r of allData.me || []) {
         meByDate[r.date] = countedSteps(r); meWeightByDate[r.date] = r.weight;
-        if (r.excludeSteps) meSkippedSteps[r.date] = r.steps;
+        if (r.excludeSteps) meSkippedSteps[r.date] = effSteps(r);
       }
 
       // All entries from weightData, oldest first for tree building
@@ -488,7 +490,7 @@
         .filter(([d]) => d <= today && (!gymFrom || d >= gymFrom) && (!gymTo || d <= gymTo))
         .map(([date, e]) => ({ date, ...e, steps: meByDate[date] ?? null, weight: meWeightByDate[date] ?? e.weight ?? null }));
       const extraEntries = (allData.me || [])
-        .filter(r => (r.weight != null || r.steps > 0) && !weightDataDates.has(r.date)
+        .filter(r => (r.weight != null || effSteps(r) > 0) && !weightDataDates.has(r.date)
                   && r.date <= today
                   && gymWeekStart(r.date).slice(0,4) === r.date.slice(0,4)
                   && (!gymFrom || r.date >= gymFrom)
@@ -1100,13 +1102,14 @@
       };
       weightData = staticWeight || {};
 
-      // Re-apply Skip ticks made just before a reload: the Gist read above can
-      // lag their save, and an Update run next would write them away
+      // Re-apply Skip ticks and manual steps entered just before a reload: the
+      // Gist read above can lag their save, and an Update run next would write
+      // them away
       try {
-        const pend = JSON.parse(sessionStorage.getItem("excludeEdits"));
+        const pend = JSON.parse(sessionStorage.getItem("dayEdits"));
         if (pend && Date.now() - pend.ts < 5 * 60 * 1000) {
-          excludeEdits = pend.edits;
-          for (const user of ["me", "mom"]) applyExcludeEdits(allData[user], excludeEdits[user]);
+          dayEdits = pend.edits;
+          for (const user of ["me", "mom"]) applyDayEdits(allData[user], dayEdits[user]);
         }
       } catch {}
 
@@ -1118,7 +1121,7 @@
 
       // Global max for fixed Y axis
       for (const r of [...(allData.me||[]), ...(allData.mom||[])].filter(r => r.date >= STEPS_FROM))
-        if (r.steps > globalMaxSteps) globalMaxSteps = r.steps;
+        if (effSteps(r) > globalMaxSteps) globalMaxSteps = effSteps(r);
 
       stepsInitialized = false; // reset so render() re-runs init on next call
 
@@ -1129,7 +1132,9 @@
           document.getElementById(`${user}-end`).value   = dates[dates.length-1];
         }
         document.getElementById(`raw-head-${user}`).innerHTML = `<th style="width:3.5rem" title="Don't count this day's steps">Skip</th>`
-          + RAW_COLS.map(c=>`<th style="width:${c.w}rem">${c.label}</th>`).join("") + `<th style="width:3rem"></th>`;
+          + RAW_COLS.map(c=>`<th style="width:${c.w}rem">${c.label}</th>`
+              + (c.key === "steps" ? `<th style="width:6.5rem" title="Count this instead of Fitbit's figure">Override</th>` : "")).join("")
+          + `<th style="width:3rem"></th>`;
       }
       renderDashboard();
 
@@ -1154,7 +1159,7 @@
 
     //── header update button ──────────────────────────────────────────────────
     async function headerUpdate() {
-      await excludeSave; // don't let the reload cut off a Skip checkbox save
+      await dayEditsSave; // don't let the reload cut off a Skip or manual-steps save
       saveViewForReload();
       localStorage.setItem('pendingUpdate', localStorage.getItem('lastTab') || 'gym');
       location.reload();
@@ -1221,10 +1226,15 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       return Number(n).toLocaleString(undefined,{maximumFractionDigits:dec});
     }
     // A day's steps, or null if it has none or was ticked Skip on the Me/Mom tab
-    function countedSteps(r) { return r && !r.excludeSteps ? r.steps ?? null : null; }
+    // A day's step count, with a manual entry standing in for Fitbit's figure.
+    // Whether the day counts at all is a separate question — that's Skip, and
+    // countedSteps answers both at once. Prefer countedSteps; reach for
+    // effSteps only where a skipped day still has to show its number.
+    function effSteps(r)     { return r ? r.manualSteps ?? r.steps ?? null : null; }
+    function countedSteps(r) { return r && !r.excludeSteps ? effSteps(r) : null; }
     function avgSteps(rows) {
-      const v=rows.filter(r=>r.steps!=null&&!r.excludeSteps);
-      return v.length ? v.reduce((s,r)=>s+r.steps,0)/v.length : null;
+      const v=rows.map(countedSteps).filter(n=>n!=null);
+      return v.length ? v.reduce((s,n)=>s+n,0)/v.length : null;
     }
     function groupBy(rows, fn) {
       const m={};
@@ -1316,8 +1326,10 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
             for (const r of momM) if (stepsWeekStart(r.date)===week) momD[r.date]=r;
             const days = mergeKeys(meD, momD);
             for (const day of days)
-              items.push({ type:"day", key:day, label:labelDay(day), me:meD[day]?.steps??null, mom:momD[day]?.steps??null,
-                           meExcl:!!meD[day]?.excludeSteps, momExcl:!!momD[day]?.excludeSteps, weekKey:week, monthKey:month });
+              items.push({ type:"day", key:day, label:labelDay(day), me:effSteps(meD[day]), mom:effSteps(momD[day]),
+                           meExcl:!!meD[day]?.excludeSteps, momExcl:!!momD[day]?.excludeSteps,
+                           meMan:meD[day]?.manualSteps!=null, momMan:momD[day]?.manualSteps!=null,
+                           weekKey:week, monthKey:month });
           }
         }
       }
@@ -1359,7 +1371,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       let html = "";
       for (const item of items) {
         if (item.type==="day") {
-          html += `<tr class="row-day"><td><span class="arrow"></span>${item.label}</td><td class="me${item.meExcl?" excl":""}">${fmt(item.me)}</td><td class="mom${item.momExcl?" excl":""}">${fmt(item.mom)}</td></tr>`;
+          html += `<tr class="row-day"><td><span class="arrow"></span>${item.label}</td><td class="me${item.meExcl?" excl":""}${item.meMan?" manual":""}">${fmt(item.me)}</td><td class="mom${item.momExcl?" excl":""}${item.momMan?" manual":""}">${fmt(item.mom)}</td></tr>`;
         } else {
           const arrow = item.open ? "▼" : "▶";
           html += `<tr class="row-${item.type}${item.open?" open":""}" onclick="${toggleFn[item.type]}('${item.key}')">
@@ -1563,8 +1575,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     function latestStepsWeek(rows) {
       const byWeek = {};
       for (const r of rows) {
-        if (r.steps == null || r.excludeSteps) continue;
-        (byWeek[stepsWeekStart(r.date)] ||= []).push(r.steps);
+        const n = countedSteps(r);
+        if (n == null) continue;
+        (byWeek[stepsWeekStart(r.date)] ||= []).push(n);
       }
       const weeks = Object.keys(byWeek).filter(w => byWeek[w].some(v => v > 0)).sort();
       if (!weeks.length) return null;
@@ -1623,22 +1636,34 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const avg = (key, rs=rows)=>rs.reduce((s,r)=>s+(r[key]||0),0)/(rs.length||1);
       const curWeekStart = weekStartEST(), curWeekEnd = todayEST();
       const weekRows = (allData[user]||[]).filter(r => r.date >= curWeekStart && r.date <= curWeekEnd && countedSteps(r));
-      const weekAvgSteps = weekRows.length ? weekRows.reduce((s,r)=>s+r.steps,0)/weekRows.length : null;
+      const weekAvgSteps = weekRows.length ? weekRows.reduce((s,r)=>s+countedSteps(r),0)/weekRows.length : null;
       document.getElementById(`${user}-cards`).innerHTML = `
         <div class="card"><div class="card-label">Days</div><div class="card-value">${fmt(rows.length)}</div></div>
-        <div class="card"><div class="card-label">Avg Steps/Day</div><div class="card-value">${fmt(avg("steps", rows.filter(r => !r.excludeSteps)))}</div></div>
+        <div class="card"><div class="card-label">Avg Steps/Day</div><div class="card-value">${fmt(avgSteps(rows))}</div></div>
         <div class="card"><div class="card-label">Week Steps/Day</div><div class="card-value">${fmt(weekAvgSteps)}</div></div>
         <div class="card"><div class="card-label">Avg Calories</div><div class="card-value">${fmt(avg("caloriesOut"))}</div></div>
         <div class="card"><div class="card-label">Avg Heart Rate</div><div class="card-value">${hrRows.length?fmt(hrRows.reduce((s,r)=>s+r.restingHeartRate,0)/hrRows.length,1):"—"}</div></div>
         <div class="card"><div class="card-label">Avg Active Min</div><div class="card-value">${fmt(avg("fairlyActiveMinutes")+avg("veryActiveMinutes"))}</div></div>
       `;
       const tbody = document.getElementById(`${user}-tbody`);
-      if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + 2}" class="status">No data.</td></tr>`; return; }
+      if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + 3}" class="status">No data.</td></tr>`; return; }
       tbody.innerHTML = [...rows].reverse().map(r => {
         const isSat = new Date(r.date + "T12:00:00").getDay() === 6;
         const cs = isSat ? ' style="border-top:2px solid #64748b"' : '';
         const skip = `<td${cs}><input type="checkbox" class="skip-cb" title="Don't count this day's steps"${r.excludeSteps ? " checked" : ""} onchange="toggleExcludeSteps('${user}','${r.date}',this.checked)"></td>`;
-        return `<tr${momBeat(r.date)?' class="mom-beat"':''}>${skip}${RAW_COLS.map(c=>`<td${cs}${c.key === "steps" && r.excludeSteps ? ' class="excl"' : ""}>${r[c.key]??"—"}</td>`).join("")}<td${cs}><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
+        const cells = RAW_COLS.map(c => {
+          if (c.key !== "steps") return `<td${cs}>${r[c.key]??"—"}</td>`;
+          // Steps shows what the day is worth; hover gives Fitbit's own figure back
+          const manual = r.manualSteps != null;
+          const cls = [r.excludeSteps ? "excl" : "", manual ? "manual" : ""].filter(Boolean).join(" ");
+          return `<td${cs}${cls ? ` class="${cls}"` : ""}${manual ? ` title="Fitbit: ${r.steps ?? "—"}"` : ""}>${effSteps(r) ?? "—"}</td>`
+               + `<td${cs}><input class="w-input steps-manual" type="text" value="${manual ? r.manualSteps : ""}"
+                   data-date="${r.date}" data-field="manual-steps-${user}" placeholder="—"
+                   title="Count this instead of Fitbit's figure; blank to use Fitbit's"
+                   onblur="setManualSteps('${user}','${r.date}',this.value)"
+                   onkeydown="handleWeightEnter(event,'${r.date}','manual-steps-${user}')" /></td>`;
+        }).join("");
+        return `<tr${momBeat(r.date)?' class="mom-beat"':''}>${skip}${cells}<td${cs}><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
       }).join("");
     }
 
@@ -1778,27 +1803,52 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     // Fitbit reported them — zeroing them wouldn't stick, since every sync
     // re-fetches the last week. Both syncs merge into existing records, so the
     // flag survives them; every steps average, card and chart skips the day.
-    let excludeEdits = { me: {}, mom: {} }; // date → ticked, made in this tab
-    let excludeSave  = null;                // tail of the save chain
-    let excludeSaveQueued = false;
+    // Per-day edits made by hand in this tab: date → { excludeSteps?, manualSteps? }.
+    // Both ride the same save, because both are a flag hung on a Fitbit record
+    // and the nightly merge only ever writes the fields it fetched.
+    let dayEdits = { me: {}, mom: {} };
+    let dayEditsSave = null;                // tail of the save chain
+    let dayEditsSaveQueued = false;
     let stepsDirty = false;                 // Steps tab re-renders when next shown
 
-    function applyExcludeEdits(records, edits) {
+    function applyDayEdits(records, edits) {
       for (const r of records) {
-        if (!(r.date in edits)) continue;
-        if (edits[r.date]) r.excludeSteps = true; else delete r.excludeSteps;
+        const e = edits[r.date];
+        if (!e) continue;
+        if ("excludeSteps" in e) { if (e.excludeSteps) r.excludeSteps = true; else delete r.excludeSteps; }
+        if ("manualSteps"  in e) { if (e.manualSteps == null) delete r.manualSteps; else r.manualSteps = e.manualSteps; }
       }
     }
 
-    function toggleExcludeSteps(user, date, checked) {
-      excludeEdits[user][date] = checked;
-      try { sessionStorage.setItem("excludeEdits", JSON.stringify({ ts: Date.now(), edits: excludeEdits })); } catch {}
-      applyExcludeEdits(allData[user], excludeEdits[user]);
+    function queueDayEdit(user, date, field, value) {
+      (dayEdits[user][date] = dayEdits[user][date] || {})[field] = value;
+      try { sessionStorage.setItem("dayEdits", JSON.stringify({ ts: Date.now(), edits: dayEdits })); } catch {}
+      applyDayEdits(allData[user], dayEdits[user]);
+      // A manual entry can outrun the axis the chart was built against
+      for (const r of [...(allData.me||[]), ...(allData.mom||[])].filter(r => r.date >= STEPS_FROM))
+        if (effSteps(r) > globalMaxSteps) globalMaxSteps = effSteps(r);
       renderRaw("me"); renderRaw("mom"); // Mom > Me highlighting reads both
       stepsDirty = true;                  // Gym and Weight re-render on tab switch anyway
-      if (excludeSaveQueued) return;      // the queued save will carry this edit
-      excludeSaveQueued = true;
-      excludeSave = (excludeSave || Promise.resolve()).then(saveExcludeEdits).catch(console.error);
+      if (dayEditsSaveQueued) return;     // the queued save will carry this edit
+      dayEditsSaveQueued = true;
+      dayEditsSave = (dayEditsSave || Promise.resolve()).then(saveDayEdits).catch(console.error);
+    }
+
+    function toggleExcludeSteps(user, date, checked) {
+      queueDayEdit(user, date, "excludeSteps", checked);
+    }
+
+    // Blank clears the override and hands the day back to Fitbit
+    function setManualSteps(user, date, value) {
+      const text = String(value).trim();
+      let n = null;
+      if (text !== "") {
+        n = Math.round(parseFloat(text.replace(/,/g, "")));
+        if (!isFinite(n) || n < 0) { renderRaw(user); return; }  // junk: put the box back
+      }
+      const cur = (allData[user] || []).find(r => r.date === date)?.manualSteps ?? null;
+      if (cur === n) return;
+      queueDayEdit(user, date, "manualSteps", n);
     }
 
     // Write onto a live read of the Gist rather than saving this tab's records
@@ -1806,20 +1856,20 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     // and writing them back would erase newer steps and weight. Every edit from
     // this tab is re-applied each time, so a read lagging an earlier save can't
     // undo it.
-    async function saveExcludeEdits() {
-      excludeSaveQueued = false;
+    async function saveDayEdits() {
+      dayEditsSaveQueued = false;
       const cfg  = decryptedConfig || await getDecryptedConfig(null);
       const gist = cfg && await fetchGistLive(appConfig?.gistId, cfg.gh_pat);
       const files = {};
       for (const user of ["me", "mom"]) {
-        if (!Object.keys(excludeEdits[user]).length) continue;
+        if (!Object.keys(dayEdits[user]).length) continue;
         let records = null;
         try { records = JSON.parse(gist.files[`${user}.json`].content).data; } catch {}
-        if (!records) { alert("Couldn't read the Gist — Skip checkbox not saved."); return; }
-        applyExcludeEdits(records, excludeEdits[user]);
+        if (!records) { alert("Couldn't read the Gist — the day's edit wasn't saved."); return; }
+        applyDayEdits(records, dayEdits[user]);
         files[`${user}.json`] = { content: JSON.stringify({ data: records }, null, 2) };
       }
-      if (!await patchGist(files, cfg.gh_pat)) alert("Failed to save the Skip checkbox.");
+      if (!await patchGist(files, cfg.gh_pat)) alert("Failed to save the day's edit.");
     }
 
     // ── Fitbit update ─────────────────────────────────────────────────────────
@@ -1862,7 +1912,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const _yd = new Date(_ty, _tm - 1, _td - 1);
       const yesterday = `${_yd.getFullYear()}-${String(_yd.getMonth()+1).padStart(2,"0")}-${String(_yd.getDate()).padStart(2,"0")}`;
       const records = allData[dataKey];
-      const withSteps = records.filter(r => r.steps > 0);
+      const withSteps = records.filter(r => r.steps > 0); // Fitbit's own, not manualSteps: a typed-in day isn't synced
       const lastSteps = withSteps.length ? withSteps.reduce((a, b) => a.date > b.date ? a : b).date : null;
       const _s7 = new Date(_ty, _tm - 1, _td - 7);
       const sevenAgo = `${_s7.getFullYear()}-${String(_s7.getMonth()+1).padStart(2,"0")}-${String(_s7.getDate()).padStart(2,"0")}`;
@@ -1927,7 +1977,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       // 4. Refresh display
       stepsInitialized = false;
       globalMaxSteps = 0;
-      for (const r of allData.me) if (r.steps > globalMaxSteps) globalMaxSteps = r.steps;
+      for (const r of allData.me) if (effSteps(r) > globalMaxSteps) globalMaxSteps = effSteps(r);
       document.getElementById(`${dataKey}-tbody`).innerHTML = "";
       renderRaw(dataKey);
       renderGym();
@@ -2133,7 +2183,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const meSkippedSteps = {};
       for (const r of allData.me || []) {
         meByDate[r.date] = countedSteps(r); meWeightByDate[r.date] = r.weight;
-        if (r.excludeSteps) meSkippedSteps[r.date] = r.steps;
+        if (r.excludeSteps) meSkippedSteps[r.date] = effSteps(r);
       }
 
       const mergedData = weightData;
