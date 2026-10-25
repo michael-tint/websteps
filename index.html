@@ -1201,7 +1201,7 @@
 if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    renderRaw("mom");
       if (name==="weight") renderWeight();
       if (name==="gym")    renderGym();
-      if (name==="dashboard" && stepsDirty) { stepsDirty = false; renderDashboard(); }
+      if (name==="dashboard") renderDashboard();
     }
 
     // ── EST date helpers ──────────────────────────────────────────────────────
@@ -1809,7 +1809,6 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     let dayEdits = { me: {}, mom: {} };
     let dayEditsSave = null;                // tail of the save chain
     let dayEditsSaveQueued = false;
-    let stepsDirty = false;                 // Steps tab re-renders when next shown
 
     function applyDayEdits(records, edits) {
       for (const r of records) {
@@ -1824,14 +1823,14 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       (dayEdits[user][date] = dayEdits[user][date] || {})[field] = value;
       try { sessionStorage.setItem("dayEdits", JSON.stringify({ ts: Date.now(), edits: dayEdits })); } catch {}
       applyDayEdits(allData[user], dayEdits[user]);
+      if (!dayEditsSaveQueued) {          // an already-queued save will carry this edit too
+        dayEditsSaveQueued = true;
+        dayEditsSave = (dayEditsSave || Promise.resolve()).then(saveDayEdits).catch(console.error);
+      }
       // A manual entry can outrun the axis the chart was built against
       for (const r of [...(allData.me||[]), ...(allData.mom||[])].filter(r => r.date >= STEPS_FROM))
         if (effSteps(r) > globalMaxSteps) globalMaxSteps = effSteps(r);
       renderRaw("me"); renderRaw("mom"); // Mom > Me highlighting reads both
-      stepsDirty = true;                  // Gym and Weight re-render on tab switch anyway
-      if (dayEditsSaveQueued) return;     // the queued save will carry this edit
-      dayEditsSaveQueued = true;
-      dayEditsSave = (dayEditsSave || Promise.resolve()).then(saveDayEdits).catch(console.error);
     }
 
     function toggleExcludeSteps(user, date, checked) {
