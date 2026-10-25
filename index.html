@@ -390,6 +390,12 @@
     }
     // Steps uses a year-anchored week scheme: Jan 1 through the first Saturday
     // is always the first week of that year; remaining weeks run Sun–Sat.
+    function prevDay(iso) {
+      const [y,m,d] = iso.split("-").map(Number);
+      const p = new Date(y, m-1, d-1);
+      return `${p.getFullYear()}-${String(p.getMonth()+1).padStart(2,"0")}-${String(p.getDate()).padStart(2,"0")}`;
+    }
+
     function stepsWeekStart(dateStr) {
       const [y,m,d] = dateStr.split("-").map(Number);
       const jan1Dow = new Date(y, 0, 1).getDay(); // 0=Sun, 6=Sat
@@ -1129,7 +1135,7 @@
         const dates = (allData[user]||[]).map(r=>r.date).sort();
         if (dates.length) {
           document.getElementById(`${user}-start`).value = dates[0];
-          document.getElementById(`${user}-end`).value   = dates[dates.length-1];
+          document.getElementById(`${user}-end`).value   = todayEST();
         }
         document.getElementById(`raw-head-${user}`).innerHTML = `<th style="width:3.5rem" title="Don't count this day's steps">Skip</th>`
           + RAW_COLS.map(c=>`<th style="width:${c.w}rem">${c.label}</th>`
@@ -1646,8 +1652,16 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         <div class="card"><div class="card-label">Avg Active Min</div><div class="card-value">${fmt(avg("fairlyActiveMinutes")+avg("veryActiveMinutes"))}</div></div>
       `;
       const tbody = document.getElementById(`${user}-tbody`);
-      if (!rows.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + 3}" class="status">No data.</td></tr>`; return; }
-      tbody.innerHTML = [...rows].reverse().map(r => {
+      const byDate   = new Map((allData[user]||[]).map(r => [r.date, r]));
+      const known    = [...byDate.keys()].sort();
+      const firstDay = start || known[0] || todayEST();
+      const lastDay  = end   || todayEST();
+      let days = [];
+      for (let d = lastDay; d >= firstDay; d = prevDay(d)) days.push(d);
+      if (momBeatOnly) days = days.filter(momBeat);
+      if (!days.length) { tbody.innerHTML=`<tr><td colspan="${RAW_COLS.length + 3}" class="status">No data.</td></tr>`; return; }
+      tbody.innerHTML = days.map(date => {
+        const r = byDate.get(date) || { date };
         const isSat = new Date(r.date + "T12:00:00").getDay() === 6;
         const cs = isSat ? ' style="border-top:2px solid #64748b"' : '';
         const skip = `<td${cs}><input type="checkbox" class="skip-cb" title="Don't count this day's steps"${r.excludeSteps ? " checked" : ""} onchange="toggleExcludeSteps('${user}','${r.date}',this.checked)"></td>`;
@@ -1663,7 +1677,8 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
                    onblur="setManualSteps('${user}','${r.date}',this.value)"
                    onkeydown="handleWeightEnter(event,'${r.date}','manual-steps-${user}')" /></td>`;
         }).join("");
-        return `<tr${momBeat(r.date)?' class="mom-beat"':''}>${skip}${cells}<td${cs}><button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button></td></tr>`;
+        const del = byDate.has(date) ? `<button class="del-btn" onclick="deleteRow('${r.date}','${user}')">✕</button>` : "";
+        return `<tr${momBeat(r.date)?' class="mom-beat"':''}>${skip}${cells}<td${cs}>${del}</td></tr>`;
       }).join("");
     }
 
@@ -1811,12 +1826,21 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     let dayEditsSaveQueued = false;
 
     function applyDayEdits(records, edits) {
-      for (const r of records) {
-        const e = edits[r.date];
-        if (!e) continue;
+      const byDate = new Map(records.map(r => [r.date, r]));
+      let added = false;
+      for (const [date, e] of Object.entries(edits)) {
+        let r = byDate.get(date);
+        if (!r) {
+          // Nothing to hang the edit on, and nothing to hang it on later either:
+          // only an edit that sets something is worth creating a record for.
+          if (!(e.manualSteps != null || e.excludeSteps)) continue;
+          r = { date, week: gymWeekStart(date) };
+          records.push(r); byDate.set(date, r); added = true;
+        }
         if ("excludeSteps" in e) { if (e.excludeSteps) r.excludeSteps = true; else delete r.excludeSteps; }
         if ("manualSteps"  in e) { if (e.manualSteps == null) delete r.manualSteps; else r.manualSteps = e.manualSteps; }
       }
+      if (added) records.sort((a, b) => a.date < b.date ? -1 : 1);
     }
 
     function queueDayEdit(user, date, field, value) {
@@ -1846,7 +1870,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         if (!isFinite(n) || n < 0) { renderRaw(user); return; }  // junk: put the box back
       }
       const cur = (allData[user] || []).find(r => r.date === date)?.manualSteps ?? null;
-      if (cur === n) return;
+      if (cur === n) return;   // includes "blank on a day that has no record": nothing to do
       queueDayEdit(user, date, "manualSteps", n);
     }
 
