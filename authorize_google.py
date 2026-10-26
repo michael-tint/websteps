@@ -44,7 +44,10 @@ ITERS    = 100_000
 METRICS_SCOPE  = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly"
 ACTIVITY_SCOPE = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly"
 
-USER = (sys.argv[1] if len(sys.argv) > 1 else "me").lower()
+ARGS  = [a.lower() for a in sys.argv[1:]]
+PROBE = "probe" in ARGS          # sign in and report, write nothing
+ARGS  = [a for a in ARGS if a != "probe"]
+USER  = ARGS[0] if ARGS else "me"
 if USER not in ("me", "mom"):
     print(f"Unknown user {USER!r}. Usage: python authorize_google.py [me|mom]")
     exit(1)
@@ -208,6 +211,42 @@ if not new_token:
           "https://myaccount.google.com/permissions and run this again.")
     exit(1)
 print(f"Scopes granted: {tokens.get('scope', 'unknown')}")
+
+# ── Probe mode: say whose data this account holds, change nothing ─────────────
+if PROBE:
+    access = tokens["access_token"]
+    def _get(url):
+        try:
+            r = urllib.request.Request(url, headers={"Authorization": f"Bearer {access}"})
+            return json.loads(urllib.request.urlopen(r).read()), None
+        except urllib.error.HTTPError as e:
+            return None, f"HTTP {e.code}: {e.read().decode()[:200]}"
+    idn, err = _get("https://health.googleapis.com/v4/users/me/identity")
+    print("")
+    if err:
+        print("  identity lookup failed:", err)
+    else:
+        print("  Fitbit account behind this Google account (legacyUserId):", idn.get("legacyUserId"))
+        print("  healthUserId:", idn.get("healthUserId"))
+    body = json.dumps({"range": {
+        "start": {"date": {"year": 2026, "month": 10, "day": 1},  "time": {"hours": 0,  "minutes": 0,  "seconds": 0}},
+        "end":   {"date": {"year": 2026, "month": 10, "day": 31}, "time": {"hours": 23, "minutes": 59, "seconds": 59}}},
+        "windowSizeDays": 1}).encode()
+    try:
+        r = urllib.request.Request(
+            "https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp",
+            data=body, method="POST",
+            headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"})
+        pts = json.loads(urllib.request.urlopen(r).read()).get("rollupDataPoints", [])
+        days = sorted(f"{p['civilStartTime']['date']['year']:04d}-{p['civilStartTime']['date']['month']:02d}-{p['civilStartTime']['date']['day']:02d}"
+                      for p in pts if p.get("civilStartTime"))
+        print(f"  October step days in this account: {len(days)}"
+              + (f", latest {days[-1]}" if days else " (none)"))
+    except urllib.error.HTTPError as e:
+        print("  steps lookup failed:", e.code, e.read().decode()[:200])
+    print("")
+    print("  PROBE ONLY - nothing was written. Re-run without 'probe' to store it.")
+    raise SystemExit(0)
 
 # ── Update encrypted config on Gist only (single source of truth) ────────────
 # Re-read the Gist first: the browser flow above can take minutes, and another
