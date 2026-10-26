@@ -13,7 +13,12 @@ on:
     # because skipping is success. Starting late and never guarding is strictly
     # better: a delay just pushes the run further into the same ET day.
     - cron: "15 6 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      report_since:
+        description: "Print a Fitbit vs Google Health steps report from this date instead of updating"
+        required: false
+        default: ""
 
 jobs:
   update:
@@ -33,6 +38,14 @@ jobs:
         run: pip install cryptography
 
       - name: Run update
+        if: ${{ !inputs.report_since }}
         env:
           WEBSTEPS_PASSWORD: ${{ secrets.WEBSTEPS_PASSWORD }}
         run: python nightly_update.py
+
+      - name: Steps report
+        if: ${{ inputs.report_since }}
+        env:
+          WEBSTEPS_PASSWORD: ${{ secrets.WEBSTEPS_PASSWORD }}
+          REPORT_SINCE: ${{ inputs.report_since }}
+        run: python report_steps.py
