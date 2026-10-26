@@ -1776,9 +1776,30 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       return res?.ok ?? false;
     }
 
-    async function saveUserData(dataKey, pat) {
+    // Merge this tab's records onto a live read rather than writing the file
+    // whole. A tab only holds what it loaded, so overwriting erases anything
+    // stored since — a Skip tick, a manual count, a day another writer added.
+    // This is the same discipline saveDayEdits already follows; updateFitbit
+    // and deleteRow used to write straight over the top. Deletions are the one
+    // thing a merge cannot express, so they are named explicitly.
+    async function saveUserData(dataKey, pat, removedDates = []) {
       const filename = dataKey + ".json";
-      return patchGist({ [filename]: { content: JSON.stringify({ data: allData[dataKey] }, null, 2) } }, pat);
+      const gist = await fetchGistLive(appConfig?.gistId, pat);
+      let live = null;
+      try { live = recordsFrom(JSON.parse(gist.files[filename].content)); } catch {}
+      // Refuse rather than overwrite blind: a failed fetch can be retried, a
+      // clobbered file cannot be put back.
+      if (!live) { console.error(`saveUserData: could not read ${filename}; not overwriting it`); return false; }
+
+      const byDate = new Map(live.map(r => [r.date, r]));
+      for (const r of allData[dataKey] || []) {
+        const ex = byDate.get(r.date);
+        if (ex) Object.assign(ex, r);   // our fetched fields win; keys only the Gist has survive
+        else byDate.set(r.date, r);
+      }
+      for (const d of removedDates) byDate.delete(d);
+      const merged = [...byDate.values()].sort((a, b) => a.date < b.date ? -1 : 1);
+      return patchGist({ [filename]: { content: JSON.stringify({ data: merged }, null, 2) } }, pat);
     }
 
     // ── GitHub Contents API (config.json only) ────────────────────────────────
@@ -1812,7 +1833,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       _saveTimers[key] = setTimeout(async () => {
         const cfg = await getDecryptedConfig(null);
         if (!cfg) { alert("No credentials available."); return; }
-        const ok = await saveUserData(key, cfg.gh_pat);
+        const ok = await saveUserData(key, cfg.gh_pat, [date]);
         if (!ok) alert("Failed to save.");
       }, 600);
     }
