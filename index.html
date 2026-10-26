@@ -535,10 +535,13 @@
       const monthYM = weekStart.slice(0,7); // month of current week's Monday
       const [mY, mM] = monthYM.split("-").map(Number);
       const prevMonthYM = `${mM === 1 ? mY - 1 : mY}-${String(mM === 1 ? 12 : mM - 1).padStart(2, "0")}`;
-      const curMonthWkAvgs  = sortedWks.filter(w => w.slice(0,7) === monthYM).map(w => weekAvgMap[w]).filter(v => v != null);
-      const prevMonthWkAvgs = sortedWks.filter(w => w.slice(0,7) === prevMonthYM).map(w => weekAvgMap[w]).filter(v => v != null);
-      const curMonthAvg  = curMonthWkAvgs.length  ? curMonthWkAvgs.reduce((s,v)=>s+v,0)  / curMonthWkAvgs.length  : null;
-      const prevMonthAvg = prevMonthWkAvgs.length ? prevMonthWkAvgs.reduce((s,v)=>s+v,0) / prevMonthWkAvgs.length : null;
+      // Average the month's DAYS, not the averages of its weeks: a 2-day week
+      // must not weigh the same as a 7-day one. The month is still bounded by
+      // whole weeks (w.slice(0,7)), so which days it contains is unchanged.
+      const monthDayVals = ym => sortedWks.filter(w => w.slice(0,7) === ym).flatMap(w => weekWtMap[w] || []);
+      const mean = vs => vs.length ? vs.reduce((s,v)=>s+v,0) / vs.length : null;
+      const curMonthAvg  = mean(monthDayVals(monthYM));
+      const prevMonthAvg = mean(monthDayVals(prevMonthYM));
       const lossMon = (curMonthAvg != null && prevMonthAvg != null) ? curMonthAvg - prevMonthAvg : null;
 
       function fmtDelta(n) {
@@ -2336,10 +2339,11 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const monthYMW = weekStart.slice(0,7);
       const [mYW, mMW] = monthYMW.split("-").map(Number);
       const prevMonthYMW = `${mMW === 1 ? mYW - 1 : mYW}-${String(mMW === 1 ? 12 : mMW - 1).padStart(2, "0")}`;
-      const curMonthWkAvgsW  = sortedWksW.filter(w => w.slice(0,7) === monthYMW).map(w => weekAvgMapW[w]).filter(v => v != null);
-      const prevMonthWkAvgsW = sortedWksW.filter(w => w.slice(0,7) === prevMonthYMW).map(w => weekAvgMapW[w]).filter(v => v != null);
-      const curMonthAvgW  = curMonthWkAvgsW.length  ? curMonthWkAvgsW.reduce((s,v)=>s+v,0)  / curMonthWkAvgsW.length  : null;
-      const prevMonthAvgW = prevMonthWkAvgsW.length ? prevMonthWkAvgsW.reduce((s,v)=>s+v,0) / prevMonthWkAvgsW.length : null;
+      // Same rule as the Gym cards: average the month's days, bounded by weeks
+      const monthDayValsW = ym => sortedWksW.filter(w => w.slice(0,7) === ym).flatMap(w => weekWtMapW[w] || []);
+      const meanW = vs => vs.length ? vs.reduce((s,v)=>s+v,0) / vs.length : null;
+      const curMonthAvgW  = meanW(monthDayValsW(monthYMW));
+      const prevMonthAvgW = meanW(monthDayValsW(prevMonthYMW));
       const monthDelta = (curMonthAvgW != null && prevMonthAvgW != null) ? curMonthAvgW - prevMonthAvgW : null;
 
       function fmtDelta(n) {
