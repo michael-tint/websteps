@@ -1,0 +1,32 @@
+name: Steps report
+
+# Prints daily steps from Fitbit and Google Health beside what the Gist
+# stores (report_steps.py). Writes nothing but the rotated Fitbit tokens.
+on:
+  push:
+    branches: [claude/blissful-cerf-fx6ah9]
+    paths: [report_steps.py, .github/workflows/steps-report.yml]
+  workflow_dispatch:
+    inputs:
+      report_since:
+        description: "First date to report"
+        default: "2026-10-01"
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install cryptography
+
+      - name: Steps report
+        env:
+          WEBSTEPS_PASSWORD: ${{ secrets.WEBSTEPS_PASSWORD }}
+          REPORT_SINCE: ${{ inputs.report_since || '2026-10-01' }}
+        run: python report_steps.py

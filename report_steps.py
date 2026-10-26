@@ -6,7 +6,7 @@ nightly can no longer sign in.
 
     REPORT_SINCE=2026-10-01 WEBSTEPS_PASSWORD=… python report_steps.py
 
-Runs in GitHub Actions (nightly-update.yml with the report_since input),
+Runs in GitHub Actions (steps-report.yml, on a push to this branch),
 because this needs api.fitbit.com.
 """
 import json, os, sys
