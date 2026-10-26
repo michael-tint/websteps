@@ -2006,14 +2006,17 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
           if (!byDate[d]?.weight || w < byDate[d].weight) { byDate[d] = byDate[d] || {}; byDate[d].weight = w; }
         }
       }
-      // Steps from Google Health override Fitbit's, last word wins — once a
-      // user has consented this is the real source and the loop above is just a
-      // fallback until Fitbit's API is turned off on 2026-11-02.
+      // Steps: keep the higher of Fitbit's and Google Health's count. Fitbit's
+      // is the watch's own daily total, the figure the Google Health app shows;
+      // Google Health only serves the per-minute records, which drop steps and
+      // run up to a few percent short. A migrated account gets zeros from
+      // Fitbit, and Fitbit's API is turned off 2026-11-02, so there Google's
+      // count wins on its own. Twin of the merge in nightly_update.py.
       if (googleCreds) {
         setStatus("Fetching steps from Google Health…");
         const gsteps = await fetchGoogleSteps(googleCreds, startDate, yesterday);
         if (gsteps === null) setStatus("Google steps fetch failed — Fitbit's figures kept", "#facc15");
-        for (const [d, n] of Object.entries(gsteps || {})) { byDate[d] = byDate[d] || {}; byDate[d].steps = n; }
+        for (const [d, n] of Object.entries(gsteps || {})) { byDate[d] = byDate[d] || {}; byDate[d].steps = Math.max(n, byDate[d].steps || 0); }
       }
       byDate[today] = byDate[today] || {};  // always create today's entry
       for (const [d, fields] of Object.entries(byDate)) {

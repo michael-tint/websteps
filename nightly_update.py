@@ -262,10 +262,12 @@ def update_user(user, creds, records, google_creds=None):
             if cur is None or w < cur:
                 by_date.setdefault(d, {})["weight"] = w
 
-    # Steps from Google Health override Fitbit's, last word wins. Fitbit serves
-    # a migrated account nothing but zeros and is turned off 2026-11-02, so once
-    # a user has consented this is the real source and the loop above is just a
-    # fallback until then.
+    # Steps: keep the higher of Fitbit's and Google Health's count. Fitbit's is
+    # the watch's own daily total, the figure the Google Health app shows.
+    # Google Health only serves the per-minute records, which drop steps (a
+    # minute mid-walk reads ~0) and run up to a few percent short. Fitbit
+    # serves a migrated account nothing but zeros and is turned off 2026-11-02,
+    # so there Google's count wins on its own.
     if google_creds:
         gsteps = fetch_google_steps(google_creds, start, yesterday)
         if gsteps is None:
@@ -273,7 +275,8 @@ def update_user(user, creds, records, google_creds=None):
         else:
             print(f"  google health: {len(gsteps)} day(s) of steps")
         for d, n in (gsteps or {}).items():
-            by_date.setdefault(d, {})["steps"] = n
+            fields = by_date.setdefault(d, {})
+            fields["steps"] = max(n, fields.get("steps", 0))
 
     by_date.setdefault(today.isoformat(), {})  # always create today's entry
 
