@@ -303,7 +303,7 @@
   <!-- WEIGHT -->
   <div id="panel-weight" class="panel">
     <div class="controls">
-      <button id="google-connect-btn" onclick="connectGoogleHealth()" title="Re-authorize the Google Health account that weight is pulled from"
+      <button id="google-connect-btn" onclick="connectGoogleHealth()" title="Re-authorize Me's or Mom's Google Health account"
               style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.28rem 0.7rem;font-size:0.82rem;cursor:pointer;">Connect Google Health</button>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
         <span style="font-size:0.75rem;color:#64748b">From</span>
@@ -1951,20 +1951,26 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if (!cfg) { if (btn) btn.disabled = false; return; }
       const pat   = cfg.gh_pat;
       const creds = dataKey === "me" ? cfg.meCreds : cfg.momCreds;
-      if (!creds?.client_id) { setStatus("No Fitbit credentials in config for " + dataKey, "#f87171"); if (btn) btn.disabled = false; return; }
-      const fitbitAuth = btoa(`${creds.client_id}:${creds.client_secret}`);
+      const googleCreds = dataKey === "me" ? cfg.googleCreds : cfg[`${dataKey}GoogleCreds`];
+      if (!creds?.client_id && !googleCreds) { setStatus("No credentials in config for " + dataKey, "#f87171"); if (btn) btn.disabled = false; return; }
 
-      // 1. Refresh Fitbit token
-      setStatus("Refreshing Fitbit token…");
-      const tokenRes = await fetch("https://api.fitbit.com/oauth2/token", {
-        method: "POST",
-        headers: { "Authorization": `Basic ${fitbitAuth}`, "Content-Type": "application/x-www-form-urlencoded" },
-        body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(creds.refresh_token)}`,
-      }).catch(() => null);
-      if (!tokenRes?.ok) { setStatus(`Fitbit token refresh failed (${tokenRes?.status})`, "#f87171"); if (btn) btn.disabled = false; return; }
-      const tokens = await tokenRes.json();
-      const accessToken = tokens.access_token;
-      creds.refresh_token = tokens.refresh_token;
+      // 1. Refresh Fitbit token. Failing is expected once Fitbit's API is turned
+      // off, and no reason to stop: Google Health carries the update from then on.
+      let accessToken = null, rotated = false;
+      if (creds?.client_id) {
+        setStatus("Refreshing Fitbit token…");
+        const tokenRes = await fetch("https://api.fitbit.com/oauth2/token", {
+          method: "POST",
+          headers: { "Authorization": `Basic ${btoa(`${creds.client_id}:${creds.client_secret}`)}`, "Content-Type": "application/x-www-form-urlencoded" },
+          body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(creds.refresh_token)}`,
+        }).catch(() => null);
+        if (tokenRes?.ok) {
+          const tokens = await tokenRes.json();
+          accessToken = tokens.access_token;
+          creds.refresh_token = tokens.refresh_token;
+          rotated = true;
+        } else console.warn(`Fitbit token refresh failed (${tokenRes?.status}); going on with Google Health alone`);
+      }
 
       // 2. Full sync — activity + weight
       const fitbitHdrs = { "Authorization": `Bearer ${accessToken}`, "Accept-Language": "en_US" };
@@ -1983,40 +1989,69 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       const byDate = {};
       const store = (d, k, v) => { const n = parseFloat(v); if (!isNaN(n) && (n !== 0 || k === "steps" || k === "floors")) { byDate[d] = byDate[d] || {}; byDate[d][k] = Number.isInteger(n) ? n : Math.round(n * 10) / 10; } };
       const METRICS = [["steps","steps"],["calories","caloriesOut"],["caloriesBMR","caloriesBMR"],["activityCalories","activityCalories"],["floors","floors"],["elevation","elevation"],["minutesSedentary","sedentaryMinutes"],["minutesLightlyActive","lightlyActiveMinutes"],["minutesFairlyActive","fairlyActiveMinutes"],["minutesVeryActive","veryActiveMinutes"]];
-      setStatus("Fetching activity…");
-      for (const [resource, field] of METRICS) {
-        const d = await fitbitGet(`https://api.fitbit.com/1/user/-/activities/${resource}/date/${startDate}/${yesterday}.json`);
-        for (const e of d[`activities-${resource}`] || []) store(e.dateTime, field, e.value);
+      if (accessToken) {
+        setStatus("Fetching activity…");
+        for (const [resource, field] of METRICS) {
+          const d = await fitbitGet(`https://api.fitbit.com/1/user/-/activities/${resource}/date/${startDate}/${yesterday}.json`);
+          for (const e of d[`activities-${resource}`] || []) store(e.dateTime, field, e.value);
+        }
+        setStatus("Fetching heart rate…");
+        const hrData = await fitbitGet(`https://api.fitbit.com/1/user/-/activities/heart/date/${startDate}/${yesterday}.json`);
+        for (const e of hrData["activities-heart"] || []) { const rhr = e.value?.restingHeartRate; if (rhr) store(e.dateTime, "restingHeartRate", rhr); }
       }
-      setStatus("Fetching heart rate…");
-      const hrData = await fitbitGet(`https://api.fitbit.com/1/user/-/activities/heart/date/${startDate}/${yesterday}.json`);
-      for (const e of hrData["activities-heart"] || []) { const rhr = e.value?.restingHeartRate; if (rhr) store(e.dateTime, "restingHeartRate", rhr); }
+      const live = JSON.parse(JSON.stringify(byDate));   // Fitbit's own figures, before anything merges in
       // Weight comes from Google Health, not Fitbit — the scale stopped feeding
-      // Fitbit's weight log on 2026-08-03. Only "me" has a Google account.
-      const googleCreds = dataKey === "me" ? cfg.googleCreds : cfg[`${dataKey}GoogleCreds`];
-      if (dataKey === "me" && googleCreds) {
+      // Fitbit's weight log on 2026-08-03. An account with no scale just has no
+      // weigh-ins.
+      if (googleCreds) {
         setStatus("Fetching weight…");
         // 30-day window like the old Fitbit weight fetch, so a stretch of missed
         // days backfills itself rather than only ever catching the last week.
         const _w30 = new Date(_ty, _tm - 1, _td - 30);
         const wtFrom = `${_w30.getFullYear()}-${String(_w30.getMonth()+1).padStart(2,"0")}-${String(_w30.getDate()).padStart(2,"0")}`;
-        const weights = await fetchGoogleWeights(cfg.googleCreds, wtFrom, today);
+        const weights = await fetchGoogleWeights(googleCreds, wtFrom, today);
         if (weights === null) setStatus("Weight fetch failed — steps still saved", "#facc15");
         for (const [d, w] of Object.entries(weights || {})) {
           if (!byDate[d]?.weight || w < byDate[d].weight) { byDate[d] = byDate[d] || {}; byDate[d].weight = w; }
         }
       }
-      // Steps: keep the higher of Fitbit's and Google Health's count. Fitbit's
-      // is the watch's own daily total, the figure the Google Health app shows;
-      // Google Health only serves the per-minute records, which drop steps and
-      // run up to a few percent short. A migrated account gets zeros from
-      // Fitbit, and Fitbit's API is turned off 2026-11-02, so there Google's
-      // count wins on its own. Twin of the merge in nightly_update.py.
+      // Fitbit first, Google Health in its blanks. Twin of update_user() in
+      // nightly_update.py — change both.
+      let gsteps = null, gactivity = null;
       if (googleCreds) {
-        setStatus("Fetching steps from Google Health…");
-        const gsteps = await fetchGoogleSteps(googleCreds, startDate, yesterday);
+        setStatus("Fetching from Google Health…");
+        gsteps    = await fetchGoogleSteps(googleCreds, startDate, yesterday);
+        gactivity = await fetchGoogleActivity(googleCreds, startDate, yesterday);
         if (gsteps === null) setStatus("Google steps fetch failed — Fitbit's figures kept", "#facc15");
-        for (const [d, n] of Object.entries(gsteps || {})) { byDate[d] = byDate[d] || {}; byDate[d].steps = Math.max(n, byDate[d].steps || 0); }
+        const stored = d => records.find(r => r.date === d);
+
+        // Activity fields: Fitbit's where it has them, Google's in the blanks,
+        // and the whole day Google's when Fitbit has nothing real for it.
+        for (const [d, gfields] of Object.entries(gactivity || {})) {
+          const fb = fitbitFields(live[d], stored(d), (gsteps || {})[d] || 0, activeMinutes(gfields));
+          byDate[d] = byDate[d] || {};
+          if (!fb) Object.assign(byDate[d], gfields, { activitySource: "google" });
+          else {
+            for (const [k, v] of Object.entries(gfields)) if (fb[k] == null) byDate[d][k] = v;
+            byDate[d].activitySource = "fitbit";
+          }
+        }
+
+        // Steps: keep the higher of Fitbit's and Google Health's count. Fitbit's
+        // is the watch's own daily total, the figure the Google Health app shows;
+        // Google Health only serves the per-minute records, which drop steps and
+        // run up to a few percent short. A migrated account gets zeros from
+        // Fitbit, and Fitbit's API is turned off 2026-11-02, so there Google's
+        // count wins on its own. A day Fitbit didn't answer for is held to its
+        // stored count instead.
+        for (const [d, n] of Object.entries(gsteps || {})) {
+          const fitbit = d in live ? (live[d].steps || 0) : (stored(d)?.steps || 0);
+          byDate[d] = byDate[d] || {};
+          byDate[d].steps = Math.max(n, fitbit);
+        }
+      }
+      if (!accessToken && gsteps === null && gactivity === null) {
+        setStatus("Couldn't reach Fitbit or Google Health", "#f87171"); if (btn) btn.disabled = false; return;
       }
       byDate[today] = byDate[today] || {};  // always create today's entry
       for (const [d, fields] of Object.entries(byDate)) {
@@ -2033,19 +2068,22 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       // (this is how googleCreds got wiped: a stale tab wrote a config that
       // never had it) or hold a stale token for the OTHER user. Carry only the
       // token THIS update rotated onto the fresh copy, mirroring the
-      // re-read-before-write guard in the Python authorize/nightly scripts.
-      const rotatedToken = creds.refresh_token;
-      let cfgToSave = cfg;
-      if (await reloadGistConfig()) {
-        const freshCfg = await getDecryptedConfig(setStatus);
-        if (freshCfg) {
-          const freshCreds = dataKey === "me" ? freshCfg.meCreds : freshCfg.momCreds;
-          if (freshCreds) freshCreds.refresh_token = rotatedToken;
-          cfgToSave = freshCfg;
+      // re-read-before-write guard in the Python authorize/nightly scripts. No
+      // rotation, no write: this tab's copy of the token may be the stale one.
+      if (rotated) {
+        const rotatedToken = creds.refresh_token;
+        let cfgToSave = cfg;
+        if (await reloadGistConfig()) {
+          const freshCfg = await getDecryptedConfig(setStatus);
+          if (freshCfg) {
+            const freshCreds = dataKey === "me" ? freshCfg.meCreds : freshCfg.momCreds;
+            if (freshCreds) freshCreds.refresh_token = rotatedToken;
+            cfgToSave = freshCfg;
+          }
         }
+        const configSaved = await encryptAndSaveConfig(cfgToSave, setStatus);
+        if (!configSaved) { if (btn) btn.disabled = false; return; }
       }
-      const configSaved = await encryptAndSaveConfig(cfgToSave, setStatus);
-      if (!configSaved) { if (btn) btn.disabled = false; return; }
       const dataOk = await saveUserData(dataKey, pat);
       if (!dataOk) { if (setStatus) setStatus("Save failed", "#f87171"); if (btn) btn.disabled = false; return; }
 
@@ -2077,13 +2115,9 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     const GOOGLE_HEALTH_SCOPE   = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
     const GOOGLE_ACTIVITY_SCOPE = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly";
 
-    // Steps from Google Health. Twin of fetch_google_steps() in
-    // nightly_update.py — change both. Fitbit serves a migrated account nothing
-    // but zeros and is turned off 2026-11-02; dailyRollUp buckets by civil
-    // (local wall-clock) date, which is how records are keyed, and reconciles
-    // DST and timezone moves server-side. Returns null if the fetch broke, so
-    // the caller can tell that from "walked nowhere".
-    async function fetchGoogleSteps(googleCreds, from, to) {
+    // Access token narrowed to one scope, or null. Google Health 403s a token
+    // carrying a scope it doesn't allow, so never ask for more than a call needs.
+    async function googleAccessToken(googleCreds, scope) {
       const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -2092,41 +2126,129 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
           client_secret: googleCreds.client_secret,
           refresh_token: googleCreds.refresh_token,
           grant_type:    "refresh_token",
-          scope:         GOOGLE_ACTIVITY_SCOPE,
+          scope,
         }),
       }).catch(() => null);
-      if (!tokenRes?.ok) { console.error("Google token refresh failed", tokenRes?.status); return null; }
-      const access = (await tokenRes.json()).access_token;
+      if (!tokenRes?.ok) { console.error("Google token refresh failed", scope, tokenRes?.status); return null; }
+      return (await tokenRes.json()).access_token;
+    }
 
-      const parts  = iso => iso.split("-").map(Number);
-      const asDate = iso => { const [y,m,d] = parts(iso); return new Date(y, m-1, d); };
-      const toIso  = dt  => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
-      if ((asDate(to) - asDate(from)) / 86400000 > 89) {   // the API caps a rollup range at 90 days
-        const [y,m,d] = parts(to);
-        from = toIso(new Date(y, m-1, d-89));
-      }
+    const isoShift = (iso, days) => {
+      const [y,m,d] = iso.split("-").map(Number);
+      const dt = new Date(y, m-1, d+days);
+      return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+    };
+
+    // { "YYYY-MM-DD": rollup point } for [from, to], or null if the fetch broke.
+    // dailyRollUp buckets by civil (local wall-clock) date, which is how records
+    // are keyed, and reconciles DST and timezone moves server-side. The caller
+    // keeps the range within the type's cap: 90 days for most, 14 for
+    // total-calories and active-minutes. Twin of google_daily_rollup().
+    async function googleDailyRollUp(access, dataType, from, to) {
+      const parts = iso => iso.split("-").map(Number);
       const civil = (iso,h,m,sec) => { const [y,mo,d] = parts(iso); return { date:{year:y,month:mo,day:d}, time:{hours:h,minutes:m,seconds:sec} }; };
       const body = { range: { start: civil(from,0,0,0), end: civil(to,23,59,59) }, windowSizeDays: 1 };
-
       const byDate = {};
       let pageToken = "";
       do {
-        const res = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp", {
+        const res = await fetch(`https://health.googleapis.com/v4/users/me/dataTypes/${dataType}/dataPoints:dailyRollUp`, {
           method: "POST",
           headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
           body: JSON.stringify(pageToken ? { ...body, pageToken } : body),
         }).catch(() => null);
-        if (!res?.ok) { console.error("Google Health steps fetch failed", res?.status, await res?.json().catch(() => null)); return null; }
+        if (!res?.ok) { console.error(`Google Health ${dataType} fetch failed`, res?.status, await res?.json().catch(() => null)); return null; }
         const page = await res.json();
         for (const pt of page.rollupDataPoints || []) {
           const cd = pt.civilStartTime?.date;
-          const n  = pt.steps?.countSum;      // a string
-          if (!cd || n == null) continue;
-          byDate[`${cd.year}-${String(cd.month).padStart(2,"0")}-${String(cd.day).padStart(2,"0")}`] = parseInt(n, 10);
+          if (cd) byDate[`${cd.year}-${String(cd.month).padStart(2,"0")}-${String(cd.day).padStart(2,"0")}`] = pt;
         }
         pageToken = page.nextPageToken || "";
       } while (pageToken);
       return byDate;
+    }
+
+    // Steps from Google Health. Twin of fetch_google_steps() in
+    // nightly_update.py — change both. Fitbit serves a migrated account nothing
+    // but zeros and is turned off 2026-11-02. Returns null if the fetch broke,
+    // so the caller can tell that from "walked nowhere".
+    async function fetchGoogleSteps(googleCreds, from, to) {
+      const access = await googleAccessToken(googleCreds, GOOGLE_ACTIVITY_SCOPE);
+      if (!access) return null;
+      if (from < isoShift(to, -89)) from = isoShift(to, -89);   // the API caps a rollup range at 90 days
+      const points = await googleDailyRollUp(access, "steps", from, to);
+      if (!points) return null;
+      const byDate = {};
+      for (const [d, pt] of Object.entries(points)) {
+        const n = pt.steps?.countSum;      // a string
+        if (n != null) byDate[d] = parseInt(n, 10);
+      }
+      return byDate;
+    }
+
+    const ACTIVITY_LEVELS = { LIGHT: "lightlyActiveMinutes", MODERATE: "fairlyActiveMinutes", VIGOROUS: "veryActiveMinutes" };
+    const activeMinutes = f => Object.values(ACTIVITY_LEVELS).reduce((s, k) => s + (f[k] || 0), 0);
+
+    // { "YYYY-MM-DD": { field: value } } for the activity fields Fitbit used to
+    // supply, from Google Health; null if no token could be had. Twin of
+    // fetch_google_activity() in nightly_update.py, which explains the fields:
+    // all mean what Fitbit's did except activityCalories (Google's active
+    // energy, about half Fitbit's) and caloriesBMR (no Google source). A zero
+    // is null, blank like Fitbit's unreported zeros.
+    async function fetchGoogleActivity(googleCreds, from, to) {
+      const access = await googleAccessToken(googleCreds, GOOGLE_ACTIVITY_SCOPE);
+      if (!access) return null;
+      if (from < isoShift(to, -13)) from = isoShift(to, -13);   // calories and active minutes cap a rollup at 14 days
+      const out = {};
+      const put = (d, field, v) => {
+        if (!v && field !== "floors") v = null;   // Fitbit stored a zero floor count, but no other zero
+        else v = Number.isInteger(v) ? v : Math.round(v * 10) / 10;
+        (out[d] = out[d] || {})[field] = v;
+      };
+      for (const [d, p] of Object.entries(await googleDailyRollUp(access, "total-calories", from, to) || {}))
+        put(d, "caloriesOut", Math.trunc(p.totalCalories?.kcalSum || 0));
+      for (const [d, p] of Object.entries(await googleDailyRollUp(access, "active-energy-burned", from, to) || {}))
+        put(d, "activityCalories", Math.trunc(p.activeEnergyBurned?.kcalSum || 0));
+      for (const [d, p] of Object.entries(await googleDailyRollUp(access, "active-minutes", from, to) || {})) {
+        const levels = {};
+        for (const lv of p.activeMinutes?.activeMinutesRollupByActivityLevel || []) levels[lv.activityLevel] = parseInt(lv.activeMinutesSum || "0", 10);
+        for (const [level, field] of Object.entries(ACTIVITY_LEVELS)) put(d, field, levels[level] || 0);
+        put(d, "sedentaryMinutes", 1440 - Object.keys(ACTIVITY_LEVELS).reduce((s, l) => s + (levels[l] || 0), 0));
+      }
+      for (const [d, p] of Object.entries(await googleDailyRollUp(access, "floors", from, to) || {}))
+        put(d, "floors", parseInt(p.floors?.countSum || "0", 10));
+      for (const [d, p] of Object.entries(await googleDailyRollUp(access, "altitude", from, to) || {}))
+        put(d, "elevation", parseInt(p.altitude?.gainMillimetersSum || "0", 10) / 304.8);
+
+      // Resting heart rate needs the health-metrics scope; an account consented
+      // without it goes without.
+      const hrAccess = await googleAccessToken(googleCreds, GOOGLE_HEALTH_SCOPE);
+      if (hrAccess) {
+        const filter = `daily_resting_heart_rate.date >= "${from}" AND daily_resting_heart_rate.date < "${isoShift(to, 1)}"`;
+        let pageToken = "";
+        do {
+          const url = `https://health.googleapis.com/v4/users/me/dataTypes/daily-resting-heart-rate/dataPoints`
+                    + `?pageSize=100&filter=${encodeURIComponent(filter)}`
+                    + (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "");
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${hrAccess}` } }).catch(() => null);
+          if (!res?.ok) { console.error("Google Health resting heart rate fetch failed", res?.status); break; }
+          const page = await res.json();
+          for (const p of page.dataPoints || []) {
+            const cd = p.dailyRestingHeartRate?.date, bpm = p.dailyRestingHeartRate?.beatsPerMinute;
+            if (cd && bpm) (out[`${cd.year}-${String(cd.month).padStart(2,"0")}-${String(cd.day).padStart(2,"0")}`] ||= {}).restingHeartRate = parseInt(bpm, 10);
+          }
+          pageToken = page.nextPageToken || "";
+        } while (pageToken);
+      }
+      return out;
+    }
+
+    // Fitbit's activity fields for a day, or null when it has nothing real.
+    // Twin of fitbit_fields() in nightly_update.py, which explains the test.
+    function fitbitFields(live, stored, googleSteps, googleActive) {
+      if (live !== undefined) { const s = live.steps || 0; return s > 0 && s >= googleSteps ? live : null; }
+      if (!stored || stored.activitySource === "google") return null;
+      const a = activeMinutes(stored);
+      return a > 0 && a >= googleActive ? stored : null;
     }
 
     async function fetchGoogleWeights(googleCreds, from, to) {
@@ -2177,32 +2299,42 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
     // The one thing only the account owner can do — logging into Google — happens
     // in their own browser. Reuses the same oauth2.googleapis.com call the weight
     // refresh already makes, so CORS is known-good.
-    const GOOGLE_CONNECT_SCOPE = "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
+    // Both users consent to the same scopes (weight and resting heart rate,
+    // activity and steps), matching authorize_google.py; the fetchers narrow
+    // each request to one of them.
+    const GOOGLE_CONNECT_SCOPE = `${GOOGLE_HEALTH_SCOPE} ${GOOGLE_ACTIVITY_SCOPE}`;
+    const googleCredsKey = user => user === "me" ? "googleCreds" : `${user}GoogleCreds`;
 
     async function connectGoogleHealth() {
+      const user = (prompt("Connect whose Google Health account? (me or mom)", "me") || "").trim().toLowerCase();
+      if (!["me", "mom"].includes(user)) return;
       const cfg = await getDecryptedConfig(null);
+      const stored = cfg?.[googleCredsKey(user)] || cfg?.googleCreds;   // the OAuth client is shared; only the account differs
       // Always show the client id/secret (pre-filled with any stored value) so
       // they can be confirmed or changed. Silently reusing a stored client is
       // exactly how you get stuck on redirect_uri_mismatch — the redirect URI
       // must be registered on whichever client is used, so let the user point
       // this at the client whose console they actually control.
-      const clientId = (prompt("Google OAuth Client ID:", cfg?.googleCreds?.client_id || "") || "").trim();
+      const clientId = (prompt("Google OAuth Client ID:", stored?.client_id || "") || "").trim();
       if (!clientId) return;
-      const clientSecret = (prompt("Google OAuth Client Secret:", cfg?.googleCreds?.client_secret || "") || "").trim();
+      const clientSecret = (prompt("Google OAuth Client Secret:", stored?.client_secret || "") || "").trim();
       if (!clientSecret) return;
       // redirect_uri must be registered VERBATIM on the OAuth client. Show it so
       // it can be added before continuing (Google 400s on a mismatch otherwise).
       const redirectUri = location.origin + location.pathname;
       if (!confirm("This exact URL must be listed under 'Authorized redirect URIs' on your "
-                 + "Google OAuth client:\n\n" + redirectUri + "\n\nClick OK to continue to Google.")) return;
-      sessionStorage.setItem("googleConnect", JSON.stringify({ clientId, clientSecret, redirectUri }));
+                 + "Google OAuth client:\n\n" + redirectUri + "\n\nPick " + user.toUpperCase()
+                 + "'s Google account on the next screen. Click OK to continue to Google.")) return;
+      sessionStorage.setItem("googleConnect", JSON.stringify({ user, clientId, clientSecret, redirectUri }));
       location.href = "https://accounts.google.com/o/oauth2/v2/auth?response_type=code"
         + "&client_id="    + encodeURIComponent(clientId)
         + "&redirect_uri=" + encodeURIComponent(redirectUri)
         + "&scope="        + encodeURIComponent(GOOGLE_CONNECT_SCOPE)
         // offline + consent are what actually return a refresh_token; false keeps
-        // the grant to the Health scope alone (a lingering Fit scope 403s weight).
-        + "&access_type=offline&prompt=consent&include_granted_scopes=false";
+        // the grant to the Health scopes alone (a lingering Fit scope 403s weight).
+        // select_account forces the chooser, so the token lands under the right
+        // user rather than whoever the browser is already signed in as.
+        + "&access_type=offline&prompt=" + encodeURIComponent("select_account consent") + "&include_granted_scopes=false";
     }
 
     async function handleGoogleOAuthReturn() {
@@ -2213,7 +2345,7 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
       if ((!code && !oauthErr) || !pending) return false;
       sessionStorage.removeItem("googleConnect");
       const clean = location.pathname;
-      const { clientId, clientSecret, redirectUri } = JSON.parse(pending);
+      const { user = "me", clientId, clientSecret, redirectUri } = JSON.parse(pending);
       if (oauthErr) { alert("Google authorization was cancelled: " + oauthErr); history.replaceState(null, "", clean); return false; }
       try {
         const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -2231,10 +2363,10 @@ if (name==="mom"    && !document.getElementById("mom-tbody").innerHTML)    rende
         }
         const cfg = await getDecryptedConfig(null);
         if (!cfg) { alert("Couldn't decrypt the config to save the Google credentials."); history.replaceState(null, "", clean); return false; }
-        cfg.googleCreds = { client_id: clientId, client_secret: clientSecret, refresh_token: tokens.refresh_token };
+        cfg[googleCredsKey(user)] = { client_id: clientId, client_secret: clientSecret, refresh_token: tokens.refresh_token };
         const ok = await encryptAndSaveConfig(cfg, null);
         if (!ok) { alert("Saving the Google credentials to the Gist failed."); history.replaceState(null, "", clean); return false; }
-        alert("Google Health connected. Reloading — then press Update to pull weight.");
+        alert(`Google Health connected for ${user}. Reloading — then press Update to pull the data.`);
         location.replace(clean);
         return true;
       } catch (e) {
