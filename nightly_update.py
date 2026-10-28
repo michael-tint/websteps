@@ -4,9 +4,11 @@ nightly_update.py — headless version of the dashboard's Update button.
 Runs in GitHub Actions on a schedule. For each user (me, mom):
   1. Read the live config from the Gist and decrypt it (password from
      WEBSTEPS_PASSWORD env var).
-  2. Refresh the Fitbit token (rotates the one-time-use refresh token).
-  3. Fetch activity / heart rate from Fitbit, and (for "me") weight from the
-     Google Health API, then merge into {user}.json.
+  2. Refresh the Fitbit token (rotates the one-time-use refresh token). Once
+     Fitbit's API is gone this just fails and the run goes on without it.
+  3. Fetch activity / heart rate from Fitbit and from the Google Health API,
+     and (for "me") weight from Google Health, then merge into {user}.json:
+     steps take the higher count, other activity one source per day.
   4. Write the rotated tokens (re-encrypted config) and both data files
      back to the Gist in a single PATCH.
 
@@ -155,22 +157,12 @@ def google_access_token(google_creds, scope):
         return None
 
 
-def fetch_google_steps(google_creds, start, end):
-    """{'YYYY-MM-DD': steps} for [start, end] inclusive, or None if the fetch
-    failed — so the caller can tell "walked nowhere" from "the fetch broke".
-
-    Replaces Fitbit's activities/steps time series, which stops serving a user
-    once their account migrates to Google Health and dies outright 2026-11-02.
-    dailyRollUp buckets by civil (local wall-clock) date, which is how records
-    are keyed, and reconciles DST and timezone moves server-side.
-    """
-    access = google_access_token(google_creds, GOOGLE_ACTIVITY_SCOPE)
-    if not access:
-        return None
-
-    span = (end - start).days
-    if span > 89:                      # the API caps a rollup range at 90 days
-        start = end - timedelta(days=89)
+def google_daily_rollup(access, data_type, start, end):
+    """{'YYYY-MM-DD': rollup point} for [start, end] inclusive, or None if the
+    fetch failed. dailyRollUp buckets by civil (local wall-clock) date, which is
+    how records are keyed, and reconciles DST and timezone moves server-side.
+    The caller keeps the range within the type's cap: 90 days for most, 14 for
+    total-calories and active-minutes."""
     civil = lambda d, h, m, sec: {"date": {"year": d.year, "month": d.month, "day": d.day},
                                   "time": {"hours": h, "minutes": m, "seconds": sec}}
     body = {"range": {"start": civil(start, 0, 0, 0), "end": civil(end, 23, 59, 59)},
@@ -181,25 +173,139 @@ def fetch_google_steps(google_creds, start, end):
         payload = dict(body, pageToken=page_token) if page_token else body
         try:
             page = http_json(
-                "https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp",
+                f"https://health.googleapis.com/v4/users/me/dataTypes/{data_type}/dataPoints:dailyRollUp",
                 data=json.dumps(payload).encode(), method="POST",
                 headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"})
         except urllib.error.HTTPError as e:
-            print(f"  google health steps fetch failed: HTTP {e.code}: {e.read().decode()}")
+            print(f"  google health {data_type} fetch failed: HTTP {e.code}: {e.read().decode()}")
             return None
         for pt in page.get("rollupDataPoints", []):
             cd = (pt.get("civilStartTime") or {}).get("date")
-            n  = (pt.get("steps") or {}).get("countSum")     # a string
-            if not cd or n is None:
-                continue
-            by_date[f"{cd['year']:04d}-{cd['month']:02d}-{cd['day']:02d}"] = int(n)
+            if cd:
+                by_date[f"{cd['year']:04d}-{cd['month']:02d}-{cd['day']:02d}"] = pt
         page_token = page.get("nextPageToken") or ""
         if not page_token:
             return by_date
 
 
-def update_user(user, creds, records, google_creds=None):
-    """Refresh token, fetch data, merge into records. Mutates creds and records."""
+def fetch_google_steps(google_creds, start, end):
+    """{'YYYY-MM-DD': steps} for [start, end] inclusive, or None if the fetch
+    failed — so the caller can tell "walked nowhere" from "the fetch broke".
+
+    Replaces Fitbit's activities/steps time series, which stops serving a user
+    once their account migrates to Google Health and dies outright 2026-11-02.
+    """
+    access = google_access_token(google_creds, GOOGLE_ACTIVITY_SCOPE)
+    if not access:
+        return None
+    start = max(start, end - timedelta(days=89))   # the API caps a rollup range at 90 days
+    points = google_daily_rollup(access, "steps", start, end)
+    if points is None:
+        return None
+    return {d: int(p["steps"]["countSum"]) for d, p in points.items()
+            if (p.get("steps") or {}).get("countSum") is not None}   # countSum is a string
+
+
+ACTIVITY_LEVELS = {"LIGHT": "lightlyActiveMinutes", "MODERATE": "fairlyActiveMinutes",
+                   "VIGOROUS": "veryActiveMinutes"}
+
+
+def fetch_google_activity(google_creds, start, end):
+    """{'YYYY-MM-DD': {field: value}} for the activity fields Fitbit used to
+    supply, read from Google Health; None if no token could be had.
+
+    The fields mean what Fitbit's did (total calories, light/moderate/vigorous
+    minutes, sedentary as the rest of the day's 1440, floors, elevation in
+    feet), checked day for day against Fitbit, with two exceptions.
+    activityCalories is Google's active energy, which leaves out the basal burn
+    Fitbit counted, so it runs about half Fitbit's figure; caloriesBMR has no
+    Google source at all and isn't set. A zero is None, so it shows as blank
+    the way Fitbit's unreported zeros do, and clears a stale value on merge.
+    Resting heart rate needs the health-metrics scope; an account consented
+    without it goes without.
+    """
+    access = google_access_token(google_creds, GOOGLE_ACTIVITY_SCOPE)
+    if not access:
+        return None
+    start = max(start, end - timedelta(days=13))   # calories and active minutes cap a rollup at 14 days
+    out = {}
+
+    def put(d, field, v):
+        if not v and field != "floors":   # Fitbit stored a zero floor count, but no other zero
+            v = None
+        else:
+            v = int(v) if v == int(v) else round(v, 1)
+        out.setdefault(d, {})[field] = v
+
+    for d, p in (google_daily_rollup(access, "total-calories", start, end) or {}).items():
+        put(d, "caloriesOut", int((p.get("totalCalories") or {}).get("kcalSum", 0)))
+    for d, p in (google_daily_rollup(access, "active-energy-burned", start, end) or {}).items():
+        put(d, "activityCalories", int((p.get("activeEnergyBurned") or {}).get("kcalSum", 0)))
+    for d, p in (google_daily_rollup(access, "active-minutes", start, end) or {}).items():
+        levels = {lv.get("activityLevel"): int(lv.get("activeMinutesSum", 0))
+                  for lv in (p.get("activeMinutes") or {}).get("activeMinutesRollupByActivityLevel", [])}
+        for level, field in ACTIVITY_LEVELS.items():
+            put(d, field, levels.get(level, 0))
+        put(d, "sedentaryMinutes", 1440 - sum(levels.get(level, 0) for level in ACTIVITY_LEVELS))
+    for d, p in (google_daily_rollup(access, "floors", start, end) or {}).items():
+        put(d, "floors", int((p.get("floors") or {}).get("countSum", 0)))
+    for d, p in (google_daily_rollup(access, "altitude", start, end) or {}).items():
+        put(d, "elevation", int((p.get("altitude") or {}).get("gainMillimetersSum", 0)) / 304.8)
+
+    hr_access = google_access_token(google_creds, GOOGLE_HEALTH_SCOPE)
+    if hr_access:
+        flt = (f'daily_resting_heart_rate.date >= "{start}" AND '
+               f'daily_resting_heart_rate.date < "{end + timedelta(days=1)}"')
+        page_token = ""
+        while True:
+            params = {"pageSize": "100", "filter": flt, **({"pageToken": page_token} if page_token else {})}
+            try:
+                page = http_json("https://health.googleapis.com/v4/users/me/dataTypes/daily-resting-heart-rate/dataPoints?"
+                                 + urllib.parse.urlencode(params), headers={"Authorization": f"Bearer {hr_access}"})
+            except urllib.error.HTTPError as e:
+                print(f"  google health resting heart rate fetch failed: HTTP {e.code}: {e.read().decode()}")
+                break
+            for p in page.get("dataPoints", []):
+                rhr = p.get("dailyRestingHeartRate") or {}
+                cd, bpm = rhr.get("date"), rhr.get("beatsPerMinute")
+                if cd and bpm:
+                    out.setdefault(f"{cd['year']:04d}-{cd['month']:02d}-{cd['day']:02d}", {})["restingHeartRate"] = int(bpm)
+            page_token = page.get("nextPageToken") or ""
+            if not page_token:
+                break
+    return out
+
+
+def active_minutes(fields):
+    return sum(fields.get(f) or 0 for f in ACTIVITY_LEVELS.values())
+
+
+def fitbit_fields(live, stored, google_steps, google_active):
+    """Fitbit's activity fields for a day, or None when it has nothing real.
+
+    Fitbit's figures stand where it tracked the day at least as fully as
+    Google did. A migrated account gets only placeholders from it (0 steps or
+    a few dozen, BMR-only calories, 1440 sedentary minutes), which fall short
+    and so count as blank. While Fitbit answers, the test is its step count;
+    once it stops, a day it filled before is judged by the stored active
+    minutes (stored steps are already the higher of the two sources), and
+    Google's own earlier figures count as blank so they refresh.
+    """
+    if live is not None:
+        steps = live.get("steps", 0)
+        return live if steps > 0 and steps >= google_steps else None
+    if not stored or stored.get("activitySource") == "google":
+        return None
+    active = active_minutes(stored)
+    return stored if active > 0 and active >= google_active else None
+
+
+def refresh_fitbit(creds):
+    """Fitbit access token, rotating creds' one-time refresh token; None when
+    Fitbit won't sign in. Expected once its API is turned off, and no reason
+    to stop the Google Health fetches, which carry the update from then on."""
+    if not (creds and creds.get("client_id")):
+        return None
     auth = base64.b64encode(f"{creds['client_id']}:{creds['client_secret']}".encode()).decode()
     try:
         tokens = http_json(
@@ -211,10 +317,20 @@ def update_user(user, creds, records, google_creds=None):
             headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
         )
     except urllib.error.HTTPError as e:
-        print(f"  token refresh failed: HTTP {e.code}: {e.read().decode()}")
-        return False
+        print(f"  fitbit token refresh failed: HTTP {e.code}: {e.read().decode()}")
+        return None
+    except urllib.error.URLError as e:
+        print(f"  fitbit token refresh failed: {e.reason}")
+        return None
     creds["refresh_token"] = tokens["refresh_token"]
-    access = tokens["access_token"]
+    return tokens["access_token"]
+
+
+def update_user(user, creds, records, google_creds=None):
+    """Fetch from Fitbit and Google Health, merge into records. Mutates creds
+    (a rotated Fitbit token) and records. False only if neither source could
+    be reached."""
+    access = refresh_fitbit(creds)
 
     today = today_est()
     yesterday = today - timedelta(days=1)
@@ -237,23 +353,25 @@ def update_user(user, creds, records, google_creds=None):
             return
         by_date.setdefault(d, {})[k] = int(n) if n == int(n) else round(n, 1)
 
-    for resource, field in METRICS:
-        data = fitbit_get(
-            f"https://api.fitbit.com/1/user/-/activities/{resource}/date/{start}/{yesterday}.json", access)
-        for e in data.get(f"activities-{resource}", []):
-            store(e["dateTime"], field, e["value"])
+    if access:
+        for resource, field in METRICS:
+            data = fitbit_get(
+                f"https://api.fitbit.com/1/user/-/activities/{resource}/date/{start}/{yesterday}.json", access)
+            for e in data.get(f"activities-{resource}", []):
+                store(e["dateTime"], field, e["value"])
 
-    hr = fitbit_get(f"https://api.fitbit.com/1/user/-/activities/heart/date/{start}/{yesterday}.json", access)
-    for e in hr.get("activities-heart", []):
-        rhr = (e.get("value") or {}).get("restingHeartRate")
-        if rhr:
-            store(e["dateTime"], "restingHeartRate", rhr)
+        hr = fitbit_get(f"https://api.fitbit.com/1/user/-/activities/heart/date/{start}/{yesterday}.json", access)
+        for e in hr.get("activities-heart", []):
+            rhr = (e.get("value") or {}).get("restingHeartRate")
+            if rhr:
+                store(e["dateTime"], "restingHeartRate", rhr)
+    live = {d: dict(f) for d, f in by_date.items()}   # Fitbit's own figures, before anything merges in
 
     # Weight comes from Google Health, not Fitbit — the scale stopped feeding
-    # Fitbit's weight log on 2026-08-03. Only "me" is weighed; mom has no weight
-    # data, ever. The 30-day window matches the old Fitbit fetch so a run of
+    # Fitbit's weight log on 2026-08-03. An account with no scale just has no
+    # weigh-ins. The 30-day window matches the old Fitbit fetch so a run of
     # missed days backfills itself instead of only ever catching the last week.
-    if google_creds and user == "me":
+    if google_creds:
         weights = fetch_google_weights(google_creds, today - timedelta(days=30), today)
         if weights is None:
             print("  weight unavailable this run; activity still merged")
@@ -262,22 +380,39 @@ def update_user(user, creds, records, google_creds=None):
             if cur is None or w < cur:
                 by_date.setdefault(d, {})["weight"] = w
 
-    # Steps: keep the higher of Fitbit's and Google Health's count. Fitbit's is
-    # the watch's own daily total, the figure the Google Health app shows.
-    # Google Health only serves the per-minute records, which drop steps (a
-    # minute mid-walk reads ~0) and run up to a few percent short. Fitbit
-    # serves a migrated account nothing but zeros and is turned off 2026-11-02,
-    # so there Google's count wins on its own.
+    gsteps = gactivity = None
     if google_creds:
         gsteps = fetch_google_steps(google_creds, start, yesterday)
+        gactivity = fetch_google_activity(google_creds, start, yesterday)
         if gsteps is None:
             print("  google steps unavailable this run; keeping Fitbit's figures")
         else:
-            print(f"  google health: {len(gsteps)} day(s) of steps")
-        for d, n in (gsteps or {}).items():
-            fields = by_date.setdefault(d, {})
-            fields["steps"] = max(n, fields.get("steps", 0))
+            print(f"  google health: {len(gsteps)} day(s) of steps, {len(gactivity or {})} of activity")
 
+        # Activity fields: Fitbit's where it has them, Google's in the blanks,
+        # and the whole day Google's when Fitbit has nothing real for it.
+        by_rec = {r["date"]: r for r in records}
+        for d, gfields in (gactivity or {}).items():
+            fb = fitbit_fields(live.get(d), by_rec.get(d), (gsteps or {}).get(d, 0), active_minutes(gfields))
+            if fb is None:
+                by_date.setdefault(d, {}).update(gfields, activitySource="google")
+            else:
+                blanks = {k: v for k, v in gfields.items() if fb.get(k) is None}
+                by_date.setdefault(d, {}).update(blanks, activitySource="fitbit")
+
+        # Steps: keep the higher of Fitbit's and Google Health's count. Fitbit's
+        # is the watch's own daily total, the figure the Google Health app
+        # shows. Google Health only serves the per-minute records, which drop
+        # steps (a minute mid-walk reads ~0) and run up to a few percent short.
+        # Fitbit serves a migrated account nothing but zeros and is turned off
+        # 2026-11-02, so there Google's count wins on its own. A day Fitbit
+        # didn't answer for this run is held to its stored count instead.
+        for d, n in (gsteps or {}).items():
+            fitbit = live[d].get("steps", 0) if d in live else (by_rec.get(d) or {}).get("steps") or 0
+            by_date.setdefault(d, {})["steps"] = max(n, fitbit)
+
+    if access is None and gsteps is None and gactivity is None:
+        return False
     by_date.setdefault(today.isoformat(), {})  # always create today's entry
 
     by_rec = {r["date"]: r for r in records}
@@ -314,18 +449,20 @@ def main():
             return []
         return parsed.get("data", parsed if isinstance(parsed, list) else [])
 
-    results, payload = {}, {}
+    results, payload, rotated = {}, {}, set()
     for user, creds_key in (("me", "meCreds"), ("mom", "momCreds")):
         print(f"Updating {user}…")
         creds = cfg.get(creds_key)
-        if not creds or not creds.get("client_id"):
+        google_creds = cfg.get("googleCreds" if user == "me" else f"{user}GoogleCreds")
+        if not (creds or {}).get("client_id") and not google_creds:
             print(f"  no credentials for {user}, skipping")
             results[user] = False
             continue
         records = load_records(f"{user}.json")
-        results[user] = update_user(
-            user, creds, records,
-            cfg.get("googleCreds" if user == "me" else f"{user}GoogleCreds"))
+        token_before = (creds or {}).get("refresh_token")
+        results[user] = update_user(user, creds, records, google_creds)
+        if creds and creds.get("refresh_token") != token_before:
+            rotated.add(creds_key)
         if results[user]:
             payload[f"{user}.json"] = {"content": json.dumps({"data": records}, indent=2)}
 
@@ -337,8 +474,8 @@ def main():
     try:
         fresh_app = json.loads(read_gist()["files"]["config.json"]["content"])
         fresh_cfg = decrypt(fresh_app["encryptedBlob"], fresh_app["salt"], fresh_app["iv"])
-        for user, creds_key in (("me", "meCreds"), ("mom", "momCreds")):
-            if results.get(user) and creds_key in fresh_cfg:
+        for creds_key in rotated:
+            if creds_key in fresh_cfg:
                 fresh_cfg[creds_key]["refresh_token"] = cfg[creds_key]["refresh_token"]
         cfg, app_config = fresh_cfg, {**app_config, **fresh_app}
         print("Re-read fresh config from Gist before writing.")
