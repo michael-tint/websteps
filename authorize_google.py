@@ -7,8 +7,8 @@ Fitbit's Web API is turned off on 2026-11-02; each account's data moves to
 Google Health when that account re-consents, and its new data stops appearing
 in the legacy Fitbit API from then on. Every user therefore needs their own
 Google consent — sign in as THAT person's Google account in the browser window
-this opens. `me` is stored as googleCreds (weight + steps), `mom` as
-momGoogleCreds (steps only; mom has no weight data).
+this opens. `me` is stored as googleCreds, `mom` as momGoogleCreds; both are
+asked for the same scopes and read the same way.
 
 Weight comes from the Google Health API (the scale stopped feeding Fitbit's
 weight log on 2026-08-03). That refresh token is long-lived but not immortal:
@@ -51,8 +51,8 @@ USER  = ARGS[0] if ARGS else "me"
 if USER not in ("me", "mom"):
     print(f"Unknown user {USER!r}. Usage: python authorize_google.py [me|mom]")
     exit(1)
-# mom has no weight data, ever — steps only.
-SCOPES   = " ".join([ACTIVITY_SCOPE] if USER == "mom" else [METRICS_SCOPE, ACTIVITY_SCOPE])
+# Same scopes for everyone: weight and resting heart rate, activity and steps.
+SCOPES   = " ".join([METRICS_SCOPE, ACTIVITY_SCOPE])
 CRED_KEY = "googleCreds" if USER == "me" else f"{USER}GoogleCreds"
 
 def derive_key(salt):
