@@ -1,0 +1,26 @@
+name: Update now
+
+# One-off: runs the nightly update from this branch when this file is pushed,
+# since workflow_dispatch can't be triggered from the Claude session.
+on:
+  push:
+    branches: [claude/blissful-cerf-fx6ah9]
+    paths: [.github/workflows/update-now.yml]
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install cryptography
+
+      - name: Run update
+        env:
+          WEBSTEPS_PASSWORD: ${{ secrets.WEBSTEPS_PASSWORD }}
+        run: python nightly_update.py
